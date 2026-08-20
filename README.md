@@ -1,6 +1,6 @@
 # mysql-replica-lag-lab
 
-MySQL の非同期レプリケーションで、先行する大量更新の適用が後続の軽い更新を待たせ、Source と Replica で一時的に異なるデータが読める状況を再現するラボです。負荷の投入と観測は Rust アプリケーションから行います。
+MySQL の非同期レプリケーションで、先行する大量更新の適用が後続の軽い更新を待たせ、Source と Replica で一時的に異なるデータが読める状況を再現するラボです。負荷の投入と観測は、同じシナリオを実装したRustまたはPHPのCLIアプリケーションから行えます。
 
 ```text
 Source:  大量更新 A1, A2, ... をコミット → 軽い marker 更新をコミット
@@ -12,7 +12,8 @@ Replica: A1 を適用 → A2 を適用 → ... → marker は relay log 内で�
 ## 必要なもの
 
 - Docker Desktop または Docker Engine + Compose v2
-- Rust stable と Cargo
+- Rust版: Rust stable と Cargo
+- PHP版のローカル実行: PHP 8.2以上、PDO、`pdo_mysql`、`pcntl`
 - Source 用の `3307`、Replica 用の `3308` ポート
 
 ## クイックスタート
@@ -22,6 +23,19 @@ cp .env.example .env
 docker compose up -d --wait
 ./scripts/configure-replication.sh
 cargo run --release
+```
+
+PHP版をローカルPHPで実行する場合:
+
+```bash
+php php/bin/demo.php
+```
+
+PHP extensionを含むコンテナで実行する場合:
+
+```bash
+docker compose --profile php build php-demo
+docker compose --profile php run --rm php-demo
 ```
 
 アプリケーションは実行のたびにデモ専用の `lag_demo` データベースを Source 上で作り直します。この接続設定をデモ環境以外へ向けないでください。
@@ -63,6 +77,9 @@ Rust application
 | `src/workload.rs` | 大量更新の生成、軽いmarker更新 |
 | `src/monitor.rs` | Source / Replica の差とlagの時系列表示 |
 | `src/main.rs` | デモ全体のオーケストレーション |
+| `php/bin/demo.php` | PHP版のエントリーポイント |
+| `php/src/` | PHP版の設定、DB操作、forkワーカー、監視 |
+| `php/Dockerfile` | PDO MySQLとpcntlを含むPHP CLI環境 |
 
 ## ドキュメント
 
@@ -71,6 +88,8 @@ Rust application
 3. [デモシナリオと仕組み](docs/03-demo-scenario.md)
 4. [トラブルシューティング](docs/04-troubleshooting.md)
 5. [検証記録](docs/05-validation.md)
+6. [PHP版 実装計画](docs/06-php-implementation-plan.md)
+7. [PHP版 検証記録](docs/07-php-validation.md)
 
 ## 開発時の確認
 
@@ -78,6 +97,7 @@ Rust application
 cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test
+find php -name '*.php' -type f -print0 | xargs -0 -n1 php -l
 docker compose config --quiet
 ```
 

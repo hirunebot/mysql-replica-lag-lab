@@ -120,3 +120,39 @@ FINAL_SYNC_TIMEOUT_SECS=1200
 ```
 
 この操作でComposeプロジェクトのMySQLボリュームが削除され、デモデータは復元できません。
+
+## 9. PHP extensionが不足している
+
+PHP版の起動時に次のようなエラーが出る場合があります。
+
+```text
+Error: Required PHP extension is missing: pdo_mysql
+```
+
+必要なextensionを確認します。
+
+```bash
+php -m | grep -E '^(PDO|pdo_mysql|pcntl)$'
+```
+
+ローカル環境へ追加しない場合は、必要なextensionを含むPHPコンテナを使用します。
+
+```bash
+docker compose --profile php build php-demo
+docker compose --profile php run --rm php-demo
+```
+
+## 10. PHP版でforkできない
+
+PHP版はCLIの `pcntl_fork()` を使用するため、WindowsネイティブPHPやpcntlが無効なSAPIでは動作しません。PHPコンテナ、macOS、またはLinuxのCLI環境で実行してください。
+
+fork前にPDO接続を破棄し、親子で再接続する処理は実装済みです。独自にコードを変更する場合も、forkをまたいで同じPDO接続を共有しないでください。
+
+## 11. PHPコンテナが古いコードを実行する
+
+PHPソースはDockerイメージへコピーされます。変更後は再ビルドしてください。
+
+```bash
+docker compose --profile php build --no-cache php-demo
+docker compose --profile php run --rm php-demo
+```

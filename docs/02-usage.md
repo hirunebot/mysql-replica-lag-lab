@@ -63,7 +63,39 @@ cargo run --release
 7. Replicaが古いmarkerを返す時間を計測する。
 8. 大量更新をすべて完了し、Replicaの最終同期を確認する。
 
-## 4. 出力の読み方
+## 4. PHP版の実行
+
+Rust版とPHP版は同じ `lag_demo` データベースを再作成するため、同時に実行しないでください。
+
+### ローカルPHP
+
+必要な環境を確認します。
+
+```bash
+php --version
+php -m | grep -E '^(PDO|pdo_mysql|pcntl)$'
+```
+
+PHP 8.2以上と3つのextensionが揃っていれば、プロジェクトルートから実行できます。
+
+```bash
+php php/bin/demo.php
+```
+
+PHP版はプロジェクトルートの `.env` を外部ライブラリなしで読み込みます。`PHP_SOURCE_DSN` などが未指定の場合は `127.0.0.1:3307` / `127.0.0.1:3308` を使用します。
+
+### PHPコンテナ
+
+ローカルPHPのextension構成に依存したくない場合は、専用イメージを使用します。
+
+```bash
+docker compose --profile php build php-demo
+docker compose --profile php run --rm php-demo
+```
+
+profile付きserviceのため、通常の `docker compose up -d` ではPHPコンテナは起動しません。
+
+## 5. 出力の読み方
 
 ```text
 elapsed | Source marker | Replica marker | lag(s) | relay(bytes) | read-pos | exec-pos | heavy
@@ -84,7 +116,7 @@ elapsed | Source marker | Replica marker | lag(s) | relay(bytes) | read-pos | ex
 
 `Seconds_Behind_Source` は0でも、Replicaでmarkerが古い場合があります。デモの成否はmarkerの実データ比較で判断します。
 
-## 5. 負荷パラメーター
+## 6. 負荷パラメーター
 
 `.env` で以下を変更できます。
 
@@ -97,6 +129,10 @@ elapsed | Source marker | Replica marker | lag(s) | relay(bytes) | read-pos | ex
 | `POLL_INTERVAL_MS` | `500` | 監視間隔 |
 | `INITIAL_SYNC_TIMEOUT_SECS` | `600` | 初期同期待ちの上限 |
 | `FINAL_SYNC_TIMEOUT_SECS` | `600` | marker・最終同期待ちの上限 |
+| `PHP_SOURCE_DSN` | `mysql:host=127.0.0.1;port=3307;charset=utf8mb4` | PHP版のSource接続先 |
+| `PHP_REPLICA_DSN` | `mysql:host=127.0.0.1;port=3308;charset=utf8mb4` | PHP版のReplica接続先 |
+| `PHP_DATABASE_USER` | `root` | PHP版のMySQLユーザー |
+| `PHP_DATABASE_PASSWORD` | `root` | PHP版のMySQLパスワード |
 | `SOURCE_CPUS` | `2.0` | SourceコンテナのCPU上限 |
 | `REPLICA_CPUS` | `0.25` | ReplicaコンテナのCPU上限 |
 
@@ -107,7 +143,7 @@ docker compose up -d --force-recreate --wait
 ./scripts/configure-replication.sh
 ```
 
-## 6. 状態の手動確認
+## 7. 状態の手動確認
 
 レプリケーション状態:
 
@@ -135,7 +171,7 @@ docker compose exec replica \
   mysql -uroot -proot -e "SELECT version, COUNT(*) FROM lag_demo.items GROUP BY version"
 ```
 
-## 7. 再実行と終了
+## 8. 再実行と終了
 
 MySQLを起動したまま `cargo run --release` を再実行できます。デモ用スキーマは自動的に作り直されます。
 
