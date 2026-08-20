@@ -1,0 +1,66 @@
+services:
+  source:
+    image: mysql:8.4
+    container_name: mysql-replica-lag-source
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_HOST: "%"
+    ports:
+      - "3307:3306"
+    cpus: "${SOURCE_CPUS:-2.0}"
+    command:
+      - --server-id=1
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --binlog-row-image=FULL
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --sync-binlog=1
+      - --innodb-flush-log-at-trx-commit=1
+    volumes:
+      - source-data:/var/lib/mysql
+      - ./mysql/source-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot --silent"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 10s
+
+  replica:
+    image: mysql:8.4
+    container_name: mysql-replica-lag-replica
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_HOST: "%"
+    ports:
+      - "3308:3306"
+    cpus: "${REPLICA_CPUS:-0.25}"
+    command:
+      - --server-id=2
+      - --relay-log=relay-bin
+      - --relay-log-recovery=ON
+      - --log-bin=mysql-bin
+      - --log-replica-updates=ON
+      - --binlog-format=ROW
+      - --binlog-row-image=FULL
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --sync-binlog=1
+      - --innodb-flush-log-at-trx-commit=1
+      - --replica-parallel-workers=1
+    volumes:
+      - replica-data:/var/lib/mysql
+    depends_on:
+      source:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot --silent"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 10s
+
+volumes:
+  source-data:
+  replica-data:
