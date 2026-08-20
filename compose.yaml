@@ -61,6 +61,28 @@ services:
       retries: 40
       start_period: 10s
 
+  php-demo:
+    profiles: ["php"]
+    build:
+      context: ./php
+    environment:
+      PHP_SOURCE_DSN: mysql:host=source;port=3306;charset=utf8mb4
+      PHP_REPLICA_DSN: mysql:host=replica;port=3306;charset=utf8mb4
+      PHP_DATABASE_USER: root
+      PHP_DATABASE_PASSWORD: root
+      DEMO_ROWS: "${DEMO_ROWS:-1000000}"
+      SEED_BATCH_SIZE: "${SEED_BATCH_SIZE:-1000}"
+      HEAVY_BATCH_SIZE: "${HEAVY_BATCH_SIZE:-50000}"
+      MARKER_AFTER_BATCHES: "${MARKER_AFTER_BATCHES:-5}"
+      POLL_INTERVAL_MS: "${POLL_INTERVAL_MS:-500}"
+      INITIAL_SYNC_TIMEOUT_SECS: "${INITIAL_SYNC_TIMEOUT_SECS:-600}"
+      FINAL_SYNC_TIMEOUT_SECS: "${FINAL_SYNC_TIMEOUT_SECS:-600}"
+    depends_on:
+      source:
+        condition: service_healthy
+      replica:
+        condition: service_healthy
+
 volumes:
   source-data:
   replica-data:
