@@ -10,4 +10,3 @@ anyhow = "1.0"
 dotenvy = "0.15"
 sqlx = { version = "0.8", default-features = false, features = ["mysql", "runtime-tokio-rustls"] }
 tokio = { version = "1.47", features = ["macros", "rt-multi-thread", "sync", "time"] }
-

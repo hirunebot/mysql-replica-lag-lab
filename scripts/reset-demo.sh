@@ -8,4 +8,3 @@ cd "${project_dir}"
 echo "Stopping containers and deleting the demo-only MySQL volumes..."
 docker compose down --volumes --remove-orphans
 echo "Demo environment reset completed."
-

@@ -120,4 +120,3 @@ FINAL_SYNC_TIMEOUT_SECS=1200
 ```
 
 この操作でComposeプロジェクトのMySQLボリュームが削除され、デモデータは復元できません。
-
