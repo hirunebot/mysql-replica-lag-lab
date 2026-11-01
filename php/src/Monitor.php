@@ -11,6 +11,25 @@ final readonly class MarkerObservation
     }
 }
 
+final class MarkerTracker
+{
+    private bool $staleReadObserved = false;
+
+    public function observe(int $sourceValue, int $replicaValue, int $expectedValue): bool
+    {
+        if ($sourceValue === $expectedValue && $replicaValue !== $expectedValue) {
+            $this->staleReadObserved = true;
+        }
+
+        return $replicaValue === $expectedValue;
+    }
+
+    public function staleReadObserved(): bool
+    {
+        return $this->staleReadObserved;
+    }
+}
+
 final class Monitor
 {
     public static function waitForMarker(
@@ -21,7 +40,7 @@ final class Monitor
         Config $config,
     ): MarkerObservation {
         $started = hrtime(true);
-        $staleReadObserved = false;
+        $tracker = new MarkerTracker();
 
         echo "\n";
         echo "elapsed | Source marker | Replica marker | lag(s) | relay(bytes) | read-pos | exec-pos | heavy\n";
@@ -52,14 +71,10 @@ final class Monitor
                 $config->totalHeavyBatches(),
             );
 
-            if ($sourceMarker === $expectedValue && $replicaMarker !== $expectedValue) {
-                $staleReadObserved = true;
-            }
-
-            if ($replicaMarker === $expectedValue) {
+            if ($tracker->observe($sourceMarker, $replicaMarker, $expectedValue)) {
                 return new MarkerObservation(
                     elapsedSeconds: self::elapsedSeconds($started),
-                    staleReadObserved: $staleReadObserved,
+                    staleReadObserved: $tracker->staleReadObserved(),
                 );
             }
 

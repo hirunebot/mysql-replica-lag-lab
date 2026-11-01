@@ -126,4 +126,28 @@ mod tests {
 
         assert!(config.validate().is_err());
     }
+
+    #[test]
+    fn rejects_same_source_and_replica_url() {
+        let mut config = valid_config();
+        config.replica_database_url = config.source_database_url.clone();
+
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_zero_workload_values() {
+        for field in ["rows", "seed_batch", "heavy_batch", "marker_batch"] {
+            let mut config = valid_config();
+            match field {
+                "rows" => config.demo_rows = 0,
+                "seed_batch" => config.seed_batch_size = 0,
+                "heavy_batch" => config.heavy_batch_size = 0,
+                "marker_batch" => config.marker_after_batches = 0,
+                _ => unreachable!(),
+            }
+
+            assert!(config.validate().is_err(), "{field} should be rejected");
+        }
+    }
 }

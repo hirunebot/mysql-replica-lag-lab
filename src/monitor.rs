@@ -17,6 +17,21 @@ pub struct MarkerObservation {
     pub stale_read_observed: bool,
 }
 
+#[derive(Debug, Default)]
+struct MarkerTracker {
+    stale_read_observed: bool,
+}
+
+impl MarkerTracker {
+    fn observe(&mut self, source_value: u64, replica_value: u64, expected_value: u64) -> bool {
+        if source_value == expected_value && replica_value != expected_value {
+            self.stale_read_observed = true;
+        }
+
+        replica_value == expected_value
+    }
+}
+
 pub async fn wait_for_marker(
     source: &MySqlPool,
     replica: &MySqlPool,
@@ -25,7 +40,7 @@ pub async fn wait_for_marker(
     config: &Config,
 ) -> Result<MarkerObservation> {
     let started = Instant::now();
-    let mut stale_read_observed = false;
+    let mut tracker = MarkerTracker::default();
 
     println!();
     println!(
@@ -57,14 +72,10 @@ pub async fn wait_for_marker(
             config.total_heavy_batches(),
         );
 
-        if source_marker == expected_value && replica_marker != expected_value {
-            stale_read_observed = true;
-        }
-
-        if replica_marker == expected_value {
+        if tracker.observe(source_marker, replica_marker, expected_value) {
             return Ok(MarkerObservation {
                 elapsed: started.elapsed(),
-                stale_read_observed,
+                stale_read_observed: tracker.stale_read_observed,
             });
         }
 
@@ -76,5 +87,28 @@ pub async fn wait_for_marker(
         }
 
         tokio::time::sleep(config.poll_interval).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MarkerTracker;
+
+    #[test]
+    fn records_stale_read_until_replica_catches_up() {
+        let mut tracker = MarkerTracker::default();
+
+        assert!(!tracker.observe(1, 0, 1));
+        assert!(tracker.stale_read_observed);
+        assert!(tracker.observe(1, 1, 1));
+        assert!(tracker.stale_read_observed);
+    }
+
+    #[test]
+    fn immediate_replica_visibility_is_not_a_stale_read() {
+        let mut tracker = MarkerTracker::default();
+
+        assert!(tracker.observe(1, 1, 1));
+        assert!(!tracker.stale_read_observed);
     }
 }

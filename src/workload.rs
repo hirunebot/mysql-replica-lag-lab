@@ -53,13 +53,13 @@ async fn run_heavy_workload(
         config.total_heavy_batches()
     );
     let workload_started = Instant::now();
-    let mut first_id = 1;
-    let mut batch_number = 0;
     let mut affected_rows = 0;
     let mut ready_tx = Some(ready_tx);
 
-    while first_id <= config.demo_rows {
-        let last_id = (first_id + config.heavy_batch_size - 1).min(config.demo_rows);
+    for batch_number in 1..=config.total_heavy_batches() {
+        let (first_id, last_id) =
+            batch_range(batch_number, config.demo_rows, config.heavy_batch_size)
+                .context("failed to calculate heavy batch range")?;
         let batch_started = Instant::now();
         let result = sqlx::query(
             r#"
@@ -79,7 +79,6 @@ async fn run_heavy_workload(
         .await
         .with_context(|| format!("heavy batch failed for rows {first_id}..={last_id}"))?;
 
-        batch_number += 1;
         affected_rows += result.rows_affected();
         progress.store(batch_number, Ordering::Relaxed);
 
@@ -95,15 +94,36 @@ async fn run_heavy_workload(
         {
             let _ = sender.send(());
         }
-
-        first_id = last_id + 1;
     }
 
     Ok(HeavyWorkloadSummary {
-        batches: batch_number,
+        batches: config.total_heavy_batches(),
         affected_rows,
         elapsed_seconds: workload_started.elapsed().as_secs_f64(),
     })
+}
+
+pub(crate) fn batch_range(
+    batch_number: u64,
+    total_rows: u64,
+    batch_size: u64,
+) -> Option<(u64, u64)> {
+    if batch_number == 0 || total_rows == 0 || batch_size == 0 {
+        return None;
+    }
+
+    let first_id = batch_number
+        .checked_sub(1)?
+        .checked_mul(batch_size)?
+        .checked_add(1)?;
+    if first_id > total_rows {
+        return None;
+    }
+
+    let last_id = first_id
+        .saturating_add(batch_size.saturating_sub(1))
+        .min(total_rows);
+    Some((first_id, last_id))
 }
 
 pub async fn update_marker(source: &MySqlPool) -> Result<u64> {
@@ -115,4 +135,26 @@ pub async fn update_marker(source: &MySqlPool) -> Result<u64> {
     .context("failed to update marker on Source")?;
 
     crate::database::marker_value(source).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::batch_range;
+
+    #[test]
+    fn batch_ranges_cover_all_rows_without_overlap() {
+        let ranges: Vec<_> = (1..=3)
+            .map(|batch| batch_range(batch, 41, 20).unwrap())
+            .collect();
+
+        assert_eq!(ranges, vec![(1, 20), (21, 40), (41, 41)]);
+    }
+
+    #[test]
+    fn batch_range_rejects_invalid_or_excess_batch() {
+        assert_eq!(batch_range(0, 41, 20), None);
+        assert_eq!(batch_range(4, 41, 20), None);
+        assert_eq!(batch_range(1, 0, 20), None);
+        assert_eq!(batch_range(1, 41, 0), None);
+    }
 }

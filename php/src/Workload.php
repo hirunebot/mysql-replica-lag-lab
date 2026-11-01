@@ -166,6 +166,24 @@ final class Workload
         return Database::markerValue($source);
     }
 
+    /** @return array{int, int}|null */
+    public static function batchRange(
+        int $batchNumber,
+        int $totalRows,
+        int $batchSize,
+    ): ?array {
+        if ($batchNumber <= 0 || $totalRows <= 0 || $batchSize <= 0) {
+            return null;
+        }
+
+        $firstId = (($batchNumber - 1) * $batchSize) + 1;
+        if ($firstId > $totalRows) {
+            return null;
+        }
+
+        return [$firstId, min($firstId + $batchSize - 1, $totalRows)];
+    }
+
     /** @param resource $socket */
     private static function runHeavyWorker(Config $config, $socket): int
     {
@@ -178,8 +196,6 @@ final class Workload
                 $config->totalHeavyBatches(),
             );
             $workloadStarted = hrtime(true);
-            $firstId = 1;
-            $batchNumber = 0;
             $affectedRows = 0;
             $statement = $source->prepare(<<<'SQL'
                 UPDATE lag_demo.items
@@ -192,11 +208,22 @@ final class Workload
                 WHERE id BETWEEN ? AND ?
                 SQL);
 
-            while ($firstId <= $config->demoRows) {
-                $lastId = min($firstId + $config->heavyBatchSize - 1, $config->demoRows);
+            for (
+                $batchNumber = 1;
+                $batchNumber <= $config->totalHeavyBatches();
+                ++$batchNumber
+            ) {
+                $range = self::batchRange(
+                    $batchNumber,
+                    $config->demoRows,
+                    $config->heavyBatchSize,
+                );
+                if ($range === null) {
+                    throw new RuntimeException('Failed to calculate heavy batch range');
+                }
+                [$firstId, $lastId] = $range;
                 $batchStarted = hrtime(true);
                 $statement->execute([$firstId, $lastId]);
-                ++$batchNumber;
                 $affectedRows += $statement->rowCount();
 
                 printf(
@@ -214,13 +241,11 @@ final class Workload
                     self::send($socket, ['type' => 'ready', 'batch' => $batchNumber]);
                     $readySent = true;
                 }
-
-                $firstId = $lastId + 1;
             }
 
             self::send($socket, [
                 'type' => 'done',
-                'batches' => $batchNumber,
+                'batches' => $config->totalHeavyBatches(),
                 'affected_rows' => $affectedRows,
                 'elapsed_seconds' => self::elapsedSeconds($workloadStarted),
             ]);
