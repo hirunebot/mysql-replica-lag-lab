@@ -90,6 +90,8 @@ Rust application
 5. [検証記録](docs/05-validation.md)
 6. [PHP版 実装計画](docs/06-php-implementation-plan.md)
 7. [PHP版 検証記録](docs/07-php-validation.md)
+8. [テスト計画](docs/08-test-plan.md)
+9. [可視化フロントエンド 実装計画](docs/09-frontend-implementation-plan.md)
 
 ## 開発時の確認
 
