@@ -92,6 +92,8 @@ Rust application
 7. [PHP版 検証記録](docs/07-php-validation.md)
 8. [テスト計画](docs/08-test-plan.md)
 9. [可視化フロントエンド 実装計画](docs/09-frontend-implementation-plan.md)
+10. [フロントエンド 詳細実装手順](docs/10-frontend-implementation-steps.md)
+11. [Dashboard API・状態モデル（ステップ1 承認用）](docs/11-dashboard-api.md)
 
 ## 開発時の確認
 

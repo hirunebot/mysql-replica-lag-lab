@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "server_instance_id": "server-example",
+  "run_id": "run-example",
+  "sequence": "42",
+  "phase": "running",
+  "config": {
+    "demo_rows": "200000",
+    "seed_batch_size": "1000",
+    "heavy_batch_size": "50000",
+    "marker_after_batches": "2"
+  },
+  "plan": [
+    {
+      "operation_id": "batch-1",
+      "kind": "heavy_update",
+      "target": "source",
+      "batch_number": "1",
+      "first_id": "1",
+      "last_id": "50000",
+      "planned_rows": "50000",
+      "sql": {
+        "template": "UPDATE lag_demo.items SET version = version + 1 WHERE id BETWEEN ? AND ?",
+        "parameters": [
+          "1",
+          "50000"
+        ]
+      },
+      "after_committed": []
+    },
+    {
+      "operation_id": "batch-2",
+      "kind": "heavy_update",
+      "target": "source",
+      "batch_number": "2",
+      "first_id": "50001",
+      "last_id": "100000",
+      "planned_rows": "50000",
+      "sql": {
+        "template": "UPDATE lag_demo.items SET version = version + 1 WHERE id BETWEEN ? AND ?",
+        "parameters": [
+          "50001",
+          "100000"
+        ]
+      },
+      "after_committed": [
+        "batch-1"
+      ]
+    },
+    {
+      "operation_id": "batch-3",
+      "kind": "heavy_update",
+      "target": "source",
+      "batch_number": "3",
+      "first_id": "100001",
+      "last_id": "150000",
+      "planned_rows": "50000",
+      "sql": {
+        "template": "UPDATE lag_demo.items SET version = version + 1 WHERE id BETWEEN ? AND ?",
+        "parameters": [
+          "100001",
+          "150000"
+        ]
+      },
+      "after_committed": [
+        "batch-2"
+      ]
+    },
+    {
+      "operation_id": "batch-4",
+      "kind": "heavy_update",
+      "target": "source",
+      "batch_number": "4",
+      "first_id": "150001",
+      "last_id": "200000",
+      "planned_rows": "50000",
+      "sql": {
+        "template": "UPDATE lag_demo.items SET version = version + 1 WHERE id BETWEEN ? AND ?",
+        "parameters": [
+          "150001",
+          "200000"
+        ]
+      },
+      "after_committed": [
+        "batch-3"
+      ]
+    },
+    {
+      "operation_id": "marker",
+      "kind": "marker_update",
+      "target": "source",
+      "batch_number": null,
+      "first_id": "1",
+      "last_id": "1",
+      "planned_rows": "1",
+      "sql": {
+        "template": "UPDATE lag_demo.marker SET value = value + 1 WHERE id = ?",
+        "parameters": [
+          "1"
+        ]
+      },
+      "after_committed": [
+        "batch-2"
+      ]
+    }
+  ],
+  "operations": [
+    {
+      "operation_id": "batch-1",
+      "status": "committed",
+      "replica_status": "observed_applied",
+      "replica_observed_at": "2026-11-01T09:00:00.000Z",
+      "started_at": "2026-11-01T09:00:00.000Z",
+      "completed_at": "2026-11-01T09:00:00.000Z",
+      "elapsed_ms": 2.5,
+      "affected_rows": "50000",
+      "error": null
+    },
+    {
+      "operation_id": "batch-2",
+      "status": "committed",
+      "replica_status": "unknown",
+      "replica_observed_at": null,
+      "started_at": "2026-11-01T09:00:00.000Z",
+      "completed_at": "2026-11-01T09:00:00.000Z",
+      "elapsed_ms": 2.5,
+      "affected_rows": "50000",
+      "error": null
+    },
+    {
+      "operation_id": "batch-3",
+      "status": "planned",
+      "replica_status": "unknown",
+      "replica_observed_at": null,
+      "started_at": null,
+      "completed_at": null,
+      "elapsed_ms": null,
+      "affected_rows": null,
+      "error": null
+    },
+    {
+      "operation_id": "batch-4",
+      "status": "planned",
+      "replica_status": "unknown",
+      "replica_observed_at": null,
+      "started_at": null,
+      "completed_at": null,
+      "elapsed_ms": null,
+      "affected_rows": null,
+      "error": null
+    },
+    {
+      "operation_id": "marker",
+      "status": "committed",
+      "replica_status": "unknown",
+      "replica_observed_at": null,
+      "started_at": "2026-11-01T09:00:00.000Z",
+      "completed_at": "2026-11-01T09:00:00.000Z",
+      "elapsed_ms": 2.5,
+      "affected_rows": "1",
+      "error": null
+    }
+  ],
+  "observations": [
+    {
+      "target": "source",
+      "metric": "marker",
+      "status": "available",
+      "value": {
+        "kind": "decimal",
+        "value": "1"
+      },
+      "started_at": "2026-11-01T09:00:00.000Z",
+      "observed_at": "2026-11-01T09:00:00.000Z",
+      "elapsed_ms": 2.5,
+      "error": null
+    },
+    {
+      "target": "replica",
+      "metric": "marker",
+      "status": "available",
+      "value": {
+        "kind": "decimal",
+        "value": "0"
+      },
+      "started_at": "2026-11-01T09:00:00.000Z",
+      "observed_at": "2026-11-01T09:00:00.000Z",
+      "elapsed_ms": 2.5,
+      "error": null
+    }
+  ],
+  "manual_reads": [],
+  "stale_read_observed": true,
+  "error": null
+}

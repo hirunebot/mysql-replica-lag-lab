@@ -1,0 +1,56 @@
+[
+  {
+    "schema_version": 1,
+    "run_id": "run-example",
+    "sequence": "43",
+    "occurred_at": "2026-11-01T09:00:00.000Z",
+    "type": "run_phase_changed",
+    "payload": {
+      "phase": "waiting_final_sync"
+    }
+  },
+  {
+    "schema_version": 1,
+    "run_id": "run-example",
+    "sequence": "44",
+    "occurred_at": "2026-11-01T09:00:00.000Z",
+    "type": "db_observed",
+    "payload": {
+      "observation": {
+        "target": "replica",
+        "metric": "marker",
+        "status": "available",
+        "value": {
+          "kind": "decimal",
+          "value": "0"
+        },
+        "started_at": "2026-11-01T09:00:00.000Z",
+        "observed_at": "2026-11-01T09:00:00.000Z",
+        "elapsed_ms": 2.5,
+        "error": null
+      }
+    }
+  },
+  {
+    "schema_version": 1,
+    "run_id": "run-example",
+    "sequence": "45",
+    "occurred_at": "2026-11-01T09:00:00.000Z",
+    "type": "manual_read_completed",
+    "payload": {
+      "read": {
+        "read_id": "read-sql_null",
+        "run_id": "run-example",
+        "target": "replica",
+        "preset": "marker_sum",
+        "sql": "SELECT SUM(value) FROM lag_demo.marker;",
+        "status": "succeeded",
+        "value": null,
+        "started_at": "2026-11-01T09:00:00.000Z",
+        "completed_at": "2026-11-01T09:00:00.000Z",
+        "elapsed_ms": 1.5,
+        "error": null
+      }
+    }
+  }
+]

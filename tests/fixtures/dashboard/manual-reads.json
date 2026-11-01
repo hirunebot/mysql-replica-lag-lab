@@ -1,0 +1,71 @@
+{
+  "zero": {
+    "read_id": "read-zero",
+    "run_id": "run-example",
+    "target": "replica",
+    "preset": "marker_sum",
+    "sql": "SELECT SUM(value) FROM lag_demo.marker;",
+    "status": "succeeded",
+    "value": "0",
+    "started_at": "2026-11-01T09:00:00.000Z",
+    "completed_at": "2026-11-01T09:00:00.000Z",
+    "elapsed_ms": 1.5,
+    "error": null
+  },
+  "one": {
+    "read_id": "read-one",
+    "run_id": "run-example",
+    "target": "replica",
+    "preset": "marker_sum",
+    "sql": "SELECT SUM(value) FROM lag_demo.marker;",
+    "status": "succeeded",
+    "value": "1",
+    "started_at": "2026-11-01T09:00:00.000Z",
+    "completed_at": "2026-11-01T09:00:00.000Z",
+    "elapsed_ms": 1.5,
+    "error": null
+  },
+  "sql_null": {
+    "read_id": "read-sql_null",
+    "run_id": "run-example",
+    "target": "replica",
+    "preset": "marker_sum",
+    "sql": "SELECT SUM(value) FROM lag_demo.marker;",
+    "status": "succeeded",
+    "value": null,
+    "started_at": "2026-11-01T09:00:00.000Z",
+    "completed_at": "2026-11-01T09:00:00.000Z",
+    "elapsed_ms": 1.5,
+    "error": null
+  },
+  "pending": {
+    "read_id": "read-pending",
+    "run_id": "run-example",
+    "target": "replica",
+    "preset": "marker_sum",
+    "sql": "SELECT SUM(value) FROM lag_demo.marker;",
+    "status": "pending",
+    "value": null,
+    "started_at": "2026-11-01T09:00:00.000Z",
+    "completed_at": null,
+    "elapsed_ms": null,
+    "error": null
+  },
+  "failure": {
+    "read_id": "read-failure",
+    "run_id": "run-example",
+    "target": "replica",
+    "preset": "marker_sum",
+    "sql": "SELECT SUM(value) FROM lag_demo.marker;",
+    "status": "failed",
+    "value": null,
+    "started_at": "2026-11-01T09:00:00.000Z",
+    "completed_at": "2026-11-01T09:00:00.000Z",
+    "elapsed_ms": 1.5,
+    "error": {
+      "code": "db_unavailable",
+      "message": "Replica is unavailable",
+      "retryable": true
+    }
+  }
+}

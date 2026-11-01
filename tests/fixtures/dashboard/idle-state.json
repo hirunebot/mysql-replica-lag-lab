@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "server_instance_id": "server-example",
+  "default_config": {
+    "demo_rows": "200000",
+    "seed_batch_size": "1000",
+    "heavy_batch_size": "50000",
+    "marker_after_batches": "2"
+  },
+  "current_run": null,
+  "connections": [
+    {
+      "target": "source",
+      "display_address": "127.0.0.1:3307",
+      "status": "not_checked",
+      "checked_at": null,
+      "error": null
+    },
+    {
+      "target": "replica",
+      "display_address": "127.0.0.1:3308",
+      "status": "unavailable",
+      "checked_at": "2026-11-01T09:00:00.000Z",
+      "error": {
+        "code": "db_unavailable",
+        "message": "Replica is unavailable",
+        "retryable": true
+      }
+    }
+  ]
+}
