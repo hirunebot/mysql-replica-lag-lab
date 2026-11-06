@@ -98,7 +98,7 @@ export function applyRunEvent(
 
 ## ステップ1：通信契約と状態モデルを固定する
 
-先行作成した契約・シグネチャ・テストと承認対象は [Dashboard API・状態モデル](11-dashboard-api.md) を参照。現在は承認待ちであり、検証関数・状態遷移の処理本体は未実装。
+契約・テストと検証結果は [Dashboard API・状態モデル](11-dashboard-api.md) を参照。ステップ1のDTO検証・状態遷移は実装済み。共通runner以降は未実装で、各ステップの契約・テストを提示してから進める。
 
 ### 作業
 

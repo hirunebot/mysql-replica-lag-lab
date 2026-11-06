@@ -1,4 +1,13 @@
-/** Step 1 contract proposal. This file does not implement an API client or UI. */
+/**
+ * 最初に読む型: RunSnapshot（実行全体）、OperationPlan / OperationState（予定・実績）、
+ * Observation（DBの実測値）、ManualRead（手動SELECT結果）。
+ * DashboardStateは実行前も含む外側の箱、RunConfigは負荷設定。
+ * 小さな状態型はフィールドから必要なときだけ読む。SSEの詳細はevents.tsへ分離。
+ * 読み方: docs/12-contracts-reading-guide.md。検証処理の詳細はvalidation.ts。
+ */
+export { decodeEventEnvelope } from './events.ts';
+export type { EventEnvelope, EventPayload } from './events.ts';
+import { readDashboardState, readRunSnapshot } from './validation.ts';
 export type DecimalString = string;
 export type UtcTimestamp = string;
 export type DatabaseTarget = 'source' | 'replica';
@@ -89,29 +98,10 @@ export interface RunSnapshot {
   stale_read_observed: boolean;
   error: ApiError | null;
 }
-export type EventPayload =
-  | { type: 'run_phase_changed'; payload: { phase: RunPhase } }
-  | { type: 'query_started' | 'query_completed' | 'query_failed'; payload: { operation: OperationState } }
-  | { type: 'db_observed'; payload: { observation: Observation } }
-  | { type: 'stale_read_observed'; payload: { source_value: DecimalString; replica_value: DecimalString } }
-  | { type: 'manual_read_started' | 'manual_read_completed' | 'manual_read_failed'; payload: { read: ManualRead } }
-  | { type: 'run_completed' | 'run_failed' | 'snapshot'; payload: { snapshot: RunSnapshot } };
-export type EventEnvelope = {
-  schema_version: 1;
-  run_id: string;
-  sequence: DecimalString;
-  occurred_at: UtcTimestamp;
-} & EventPayload;
-
 /** Validate untrusted JSON and return its DTO; throw on malformed/unsupported data. */
-export function decodeRunSnapshot(_input: unknown): RunSnapshot {
-  throw new Error('Not implemented: awaiting Step 1 contract/test approval');
+export function decodeRunSnapshot(input: unknown): RunSnapshot {
+  return readRunSnapshot(input);
 }
-/** Validate an SSE envelope and its payload; never silently accept an unknown type. */
-export function decodeEventEnvelope(_input: unknown): EventEnvelope {
-  throw new Error('Not implemented: awaiting Step 1 contract/test approval');
-}
-
 export interface DatabaseConnection {
   target: DatabaseTarget;
   display_address: string;
@@ -128,6 +118,6 @@ export interface DashboardState {
 }
 
 /** Decode initial state, including idle/unreachable DB states, without inventing a run. */
-export function decodeDashboardState(_input: unknown): DashboardState {
-  throw new Error('Not implemented: awaiting Step 1 contract/test approval');
+export function decodeDashboardState(input: unknown): DashboardState {
+  return readDashboardState(input);
 }
