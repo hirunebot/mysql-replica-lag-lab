@@ -19,4 +19,12 @@ curl -sS http://127.0.0.1:3000/api/runs -H 'Content-Type: application/json' \
 
 開始は `lag_demo` を作り直す。CLI版や別プロセスのサーバーとは同時に実行しない。手動SELECTとSSEは未実装。
 
-検証：`cargo test --locked`。HTTPテストで同時開始・TCP切断・DB停止・終了不明を確認した。実MySQLではHTTPから4万行の同期完了を取得し、Replicaの適用停止時には書き込み前に `replication_not_ready` を返した。
+## Web実行のDB観測
+
+1実行につき観測サービスは1つ。markerとレプリケーション状態は既定500ms、行数と最古の未確認バッチは2秒間隔で取得する。Replicaの初期データは今回のスキーマ作成をGTIDで確認してから読む。取得に失敗したときは、前回値とその取得時刻を残す。
+
+Webの書き込みはSourceに最大2接続、preflightはReplicaに1接続。preflight用接続を閉じてから、観測専用に各DB最大2接続を使う。SELECTのDB側制限は4.5秒、接続取得を含むクライアント側制限は5秒。期限切れの接続はプールから取り除く。
+
+初期・最終同期の判定も同じ観測を使う。最終同期にはSourceワーカーの正常終了後の観測が必要で、両DBの件数・marker・Replicaの稼働状態が揃った時点で完了する。stale read未観測でも同期は完了できる。CLIは従来の照会間隔と出力を維持する。
+
+検証は `cargo test --locked`。HTTPテストで同時開始・TCP切断・DB停止・終了不明を確認した。独立観測では、実MySQLのHTTP実行で両DBのmarkerが1になった後も、Replicaの更新が1万行から4万行まで増え、全8バッチを反映済みにして完了した。

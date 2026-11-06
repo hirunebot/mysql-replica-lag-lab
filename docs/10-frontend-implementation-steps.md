@@ -188,6 +188,8 @@ API上の行数・ID・marker値・SUMは10進文字列に統一し、JavaScript
 
 ## ステップ4：実DBの観測を独立した処理へ整理する
 
+Web実行の独立観測と同期判定を実装済み。[観測間隔・接続上限・検証](14-dashboard-http.md#web実行のdb観測)を参照。
+
 ### 変更対象
 
 `src/observer.rs`、`src/database.rs`、`src/setup.rs`、`src/monitor.rs`、`src/run_manager.rs`。

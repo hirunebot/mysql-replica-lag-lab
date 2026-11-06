@@ -345,6 +345,16 @@ pub fn validate_event(e: &EventEnvelope) -> Result {
                 "payload.operation.status",
             )
         }
+        ReplicaOperationObserved { operation: o } => {
+            operation(o)?;
+            require(
+                o.status == OperationStatus::Committed
+                    && o.replica_status != ReplicaApplicationStatus::Unknown
+                    && o.replica_observed_at.is_some(),
+                ContractErrorCode::InconsistentOperation,
+                "payload.operation.replica_status",
+            )
+        }
         DbObserved { observation: o } => observation(o),
         StaleReadObserved {
             source_value,

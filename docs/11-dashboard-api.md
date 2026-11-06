@@ -57,6 +57,8 @@ OperationStateは `planned / running / committed / failed / outcome_unknown`。c
 
 Replicaの反映状態は別フィールド `unknown / pending / observed_applied / unavailable`。SourceがcommittedでもReplicaを自動的にobserved_appliedにしない。確認済みとする場合は観測時刻を持つ。
 
+Web実行ではコミット済みのUPDATEバッチを `pending` とし、Replicaで範囲のCOUNTを取得した結果は `replica_operation_observed` として通知する。最終同期で全件を確認した場合は終端スナップショットで残りのバッチも反映済みにする。
+
 ## 4. DB観測とNULLの区別
 
 Observationはtarget、metric、statusと、型付きvalueを持つ。行数・markerは `{ "kind": "decimal", "value": "0" }`。レプリケーション状態はkind=replicationとし、receiver / applier、遅延秒数、ログのファイル名と位置をまとめる。
