@@ -2,7 +2,7 @@ use std::{env, str::FromStr, time::Duration};
 
 use anyhow::{Context, Result, bail};
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Config {
     pub source_database_url: String,
     pub replica_database_url: String,
@@ -43,21 +43,17 @@ impl Config {
         self.demo_rows.div_ceil(self.heavy_batch_size)
     }
 
-    fn validate(&self) -> Result<()> {
+    pub(crate) fn validate(&self) -> Result<()> {
         if self.source_database_url == self.replica_database_url {
             bail!("SOURCE_DATABASE_URL and REPLICA_DATABASE_URL must be different");
         }
 
-        for (name, value) in [
-            ("DEMO_ROWS", self.demo_rows),
-            ("SEED_BATCH_SIZE", self.seed_batch_size),
-            ("HEAVY_BATCH_SIZE", self.heavy_batch_size),
-            ("MARKER_AFTER_BATCHES", self.marker_after_batches),
-        ] {
-            if value == 0 {
-                bail!("{name} must be greater than zero");
-            }
-        }
+        Self::validate_workload(
+            self.demo_rows,
+            self.seed_batch_size,
+            self.heavy_batch_size,
+            self.marker_after_batches,
+        )?;
 
         if self.poll_interval.is_zero()
             || self.initial_sync_timeout.is_zero()
@@ -65,13 +61,24 @@ impl Config {
         {
             bail!("poll interval and sync timeouts must be greater than zero");
         }
+        Ok(())
+    }
 
-        if self.marker_after_batches > self.total_heavy_batches() {
-            bail!(
-                "MARKER_AFTER_BATCHES ({}) exceeds the number of heavy batches ({})",
-                self.marker_after_batches,
-                self.total_heavy_batches()
-            );
+    pub(crate) fn validate_workload(rows: u64, seed: u64, heavy: u64, marker: u64) -> Result<()> {
+        for (name, value) in [
+            ("DEMO_ROWS", rows),
+            ("SEED_BATCH_SIZE", seed),
+            ("HEAVY_BATCH_SIZE", heavy),
+            ("MARKER_AFTER_BATCHES", marker),
+        ] {
+            if value == 0 {
+                bail!("{name} must be greater than zero");
+            }
+        }
+
+        let total = rows.div_ceil(heavy);
+        if marker > total {
+            bail!("MARKER_AFTER_BATCHES ({marker}) exceeds the number of heavy batches ({total})");
         }
 
         Ok(())

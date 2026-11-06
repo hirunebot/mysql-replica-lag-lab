@@ -128,6 +128,8 @@ API上の行数・ID・marker値・SUMは10進文字列に統一し、JavaScript
 
 ## ステップ2：Rustの実行処理を共有する
 
+[共通runnerの契約と検証](13-runner-contract.md)を参照。CLIは共通runnerを呼び出し、従来の起動方法と出力を維持する。
+
 ### 変更対象
 
 `src/main.rs`、`src/lib.rs`、`src/runner.rs`、`src/workload.rs`、`src/setup.rs`、`src/monitor.rs`、`src/events.rs`、`src/queries.rs`、`Cargo.toml`。
