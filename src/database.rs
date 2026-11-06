@@ -44,7 +44,7 @@ pub(crate) fn read_pool(url: &str, max: u32) -> Result<MySqlPool> {
         .acquire_timeout(READ_TIMEOUT)
         .after_connect(|connection, _| {
             Box::pin(async move {
-                sqlx::query("SET SESSION max_execution_time = 4500, transaction_read_only = ON")
+                sqlx::query("SET SESSION max_execution_time = 4500, lock_wait_timeout = 4, transaction_read_only = ON")
                     .execute(connection)
                     .await?;
                 Ok(())
@@ -58,7 +58,9 @@ pub(crate) async fn bounded_read<T>(
     read: impl AsyncFnOnce(&mut MySqlConnection) -> Result<T>,
 ) -> Result<T> {
     let deadline = tokio::time::Instant::now() + READ_TIMEOUT;
-    let mut connection = tokio::time::timeout_at(deadline, pool.acquire()).await??;
+    let mut connection = tokio::time::timeout_at(deadline, pool.acquire())
+        .await
+        .map_err(|_| sqlx::Error::PoolTimedOut)??;
     match tokio::time::timeout_at(deadline, read(&mut connection)).await {
         Ok(result) => result,
         Err(error) => {
@@ -160,4 +162,13 @@ pub(crate) async fn updated_batch_count<'a>(
         .fetch_one(connection)
         .await?;
     Ok(count as u64)
+}
+
+pub(crate) async fn marker_sum(connection: &mut MySqlConnection) -> Result<Option<String>> {
+    // DECIMALのSUMを精度を落とさず文字列化し、SQL NULLは保持する。
+    Ok(
+        sqlx::query_scalar("SELECT CAST(SUM(value) AS CHAR) FROM lag_demo.marker")
+            .fetch_one(connection)
+            .await?,
+    )
 }

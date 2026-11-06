@@ -8,16 +8,20 @@ use std::{
 
 use anyhow::{Context, ensure};
 use chrono::{SecondsFormat, Utc};
-use sqlx::{Connection, MySqlConnection, mysql::MySqlConnectOptions};
+use sqlx::{Connection, MySqlConnection, MySqlPool, mysql::MySqlConnectOptions};
 use tokio::task::JoinError;
 use uuid::Uuid;
 
 use crate::{
     config::Config,
     contracts::*,
+    database,
     events::Reporter,
     runner::{self, PreflightFailure, RunOutcome, RunnerConfig},
 };
+
+mod reads;
+pub(crate) use reads::ReadError;
 
 type RunFuture = Pin<Box<dyn Future<Output = anyhow::Result<RunOutcome>> + Send>>;
 type Engine = dyn Fn(RunnerConfig, Arc<dyn Reporter>) -> RunFuture + Send + Sync;
@@ -33,6 +37,7 @@ pub(crate) struct RunManager {
     instance: String,
     source: MySqlConnectOptions,
     replica: MySqlConnectOptions,
+    manual_pool: MySqlPool,
     engine: Arc<Engine>,
     current: Mutex<Option<CurrentRun>>,
 }
@@ -41,11 +46,24 @@ struct CurrentRun {
     snapshot: RunSnapshot,
     // 終了通知を受けただけでは解放しない。タスクの終了を確認してから解放する。
     reserved: bool,
+    generation: u64,
+    schema_observed: bool,
     terminal: Option<RunSnapshot>,
     sequence: u64,
 }
 
 impl CurrentRun {
+    fn read_pending(&self) -> bool {
+        self.snapshot
+            .manual_reads
+            .first()
+            .is_some_and(|read| read.status == ManualReadStatus::Pending)
+    }
+
+    fn busy(&self) -> bool {
+        self.reserved || self.read_pending()
+    }
+
     fn advance(&mut self) {
         self.sequence += 1;
         self.snapshot.sequence = self.sequence.to_string();
@@ -90,12 +108,15 @@ impl RunManager {
             marker_after_batches: config.marker_after_batches.to_string(),
         };
         validate_web(&default_config).context("invalid dashboard default workload")?;
+        let manual_pool = database::read_pool(&config.replica_database_url, 1)
+            .map_err(|_| anyhow::anyhow!("invalid Replica read configuration"))?;
         Ok(Arc::new(Self {
             config,
             default_config,
             instance: Uuid::new_v4().to_string(),
             source,
             replica,
+            manual_pool,
             engine,
             current: Mutex::new(None),
         }))
@@ -140,13 +161,12 @@ impl RunManager {
             .lock()
             .unwrap()
             .as_ref()
-            .is_some_and(|r| r.reserved)
+            .is_some_and(CurrentRun::busy)
         {
             return Err(StartError::Busy);
         }
         let plan = runner::build_plan(&workload)
             .map_err(|_| StartError::Invalid("Could not prepare the workload plan.".into()))?;
-        let id = Uuid::new_v4().to_string();
         let operations = plan
             .iter()
             .map(|p| OperationState {
@@ -161,10 +181,10 @@ impl RunManager {
                 error: None,
             })
             .collect();
-        let snapshot = RunSnapshot {
+        let mut snapshot = RunSnapshot {
             schema_version: 1,
             server_instance_id: self.instance.clone(),
-            run_id: id.clone(),
+            run_id: String::new(),
             sequence: "0".into(),
             phase: RunPhase::Preparing,
             config: workload.clone(),
@@ -177,16 +197,24 @@ impl RunManager {
         };
         {
             let mut current = self.current.lock().unwrap();
-            if current.as_ref().is_some_and(|r| r.reserved) {
+            if current.as_ref().is_some_and(CurrentRun::busy) {
                 return Err(StartError::Busy);
             }
+            let generation = current
+                .as_ref()
+                .map_or(1, |previous| previous.generation + 1);
+            // 起動インスタンスと採番を組にし、履歴を保持せずに古いrunを判別する。
+            snapshot.run_id = format!("{}.{}", self.instance, generation);
             *current = Some(CurrentRun {
                 snapshot: snapshot.clone(),
                 reserved: true,
+                generation,
+                schema_observed: false,
                 terminal: None,
                 sequence: 0,
             });
         }
+        let id = snapshot.run_id.clone();
         let config = RunnerConfig {
             server_instance_id: self.instance.clone(),
             run_id: id.clone(),
@@ -235,7 +263,8 @@ impl RunManager {
                     )
                 })
         });
-        if let Some(s) = terminal {
+        if let Some(mut s) = terminal {
+            s.manual_reads = std::mem::take(&mut run.snapshot.manual_reads);
             run.snapshot = s;
         }
         if released {
@@ -277,7 +306,8 @@ impl Reporter for RunReporter {
                 EventPayload::RunPhaseChanged { phase }
                     if can_transition(r.snapshot.phase, phase) =>
                 {
-                    r.snapshot.phase = phase
+                    r.snapshot.phase = phase;
+                    r.schema_observed |= phase == RunPhase::Running;
                 }
                 EventPayload::QueryStarted { operation }
                 | EventPayload::QueryCompleted { operation }
@@ -293,6 +323,9 @@ impl Reporter for RunReporter {
                     }
                 }
                 EventPayload::DbObserved { observation } => {
+                    r.schema_observed |= observation.target == DatabaseTarget::Replica
+                        && observation.metric == ObservationMetric::Marker
+                        && observation.status == ObservationStatus::Available;
                     if let Some(slot) =
                         r.snapshot.observations.iter_mut().find(|o| {
                             o.target == observation.target && o.metric == observation.metric

@@ -7,6 +7,7 @@
 | 現在の状態 | `GET /api/state` | 200 / `DashboardState`。DBに到達できなくても `unavailable` を返す |
 | 開始 | `POST /api/runs` | 202 / `preparing` の `RunSnapshot`。不正設定は400、実行枠が使用中なら409 |
 | 実行の取得 | `GET /api/runs/{id}` | 200 / 最新の `RunSnapshot`。知らないIDは404 |
+| 手動SELECT | `POST /api/runs/{id}/reads` | 200 / 完了した `ManualRead` |
 
 ```sh
 curl -sS http://127.0.0.1:3000/api/runs -H 'Content-Type: application/json' \
@@ -17,7 +18,7 @@ curl -sS http://127.0.0.1:3000/api/runs -H 'Content-Type: application/json' \
 
 最新の1実行だけをメモリに保持し、HTTP切断で止めない。実行終了が不明なら `failing` と `completion_unconfirmed` を返し、次の開始を拒否する。再起動で履歴と排他枠は失われるため、停止・再起動の前後にはローカルDBの `SHOW FULL PROCESSLIST` と `SHOW REPLICA STATUS` で前のデモ処理が残っていないことを確認する。再起動でSQLは巻き戻らない。
 
-開始は `lag_demo` を作り直す。CLI版や別プロセスのサーバーとは同時に実行しない。手動SELECTとSSEは未実装。
+開始は `lag_demo` を作り直す。CLI版や別プロセスのサーバーとは同時に実行しない。SSEは後続ステップで追加する。
 
 ## Web実行のDB観測
 
@@ -28,3 +29,9 @@ Webの書き込みはSourceに最大2接続、preflightはReplicaに1接続。pr
 初期・最終同期の判定も同じ観測を使う。最終同期にはSourceワーカーの正常終了後の観測が必要で、両DBの件数・marker・Replicaの稼働状態が揃った時点で完了する。stale read未観測でも同期は完了できる。CLIは従来の照会間隔と出力を維持する。
 
 検証は `cargo test --locked`。HTTPテストで同時開始・TCP切断・DB停止・終了不明を確認した。独立観測では、実MySQLのHTTP実行で両DBのmarkerが1になった後も、Replicaの更新が1万行から4万行まで増え、全8バッチを反映済みにして完了した。
+
+## 手動SELECT
+
+`POST /api/runs/{id}/reads` に `{"preset":"marker_sum"}` を送る。Replicaの専用プール（上限1接続）で照会し、SUMを10進文字列またはSQL NULLとして返す。初期同期後から実行でき、成功と失敗を含む直近5件は現在のrunに保存する。
+
+準備中・照会中・置き換えられたrunは409、未知IDは404、DB接続不可は503、照会のタイムアウトは504。照会中は新規runの開始を409にし、ブラウザを閉じても結果を記録する。

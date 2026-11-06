@@ -18,6 +18,8 @@ use crate::{
     run_manager::{RunManager, StartError},
 };
 
+mod reads;
+
 /// DBに接続せずHTTPルーターを構成する。到達確認は状態取得・実行時に行う。
 pub fn router(config: Config) -> anyhow::Result<Router> {
     Ok(router_with(RunManager::new(config)?))
@@ -28,6 +30,10 @@ fn router_with(manager: Arc<RunManager>) -> Router {
         .route("/api/state", get(state))
         .route("/api/runs", post(start).layer(DefaultBodyLimit::max(4096)))
         .route("/api/runs/{id}", get(run))
+        .route(
+            "/api/runs/{id}/reads",
+            post(reads::post).layer(DefaultBodyLimit::max(256)),
+        )
         .fallback(|| async { HttpError::missing() })
         .with_state(manager)
 }
@@ -47,7 +53,7 @@ async fn start(
         StartError::Busy => HttpError::new(
             StatusCode::CONFLICT,
             "run_in_progress",
-            "A run is active or its database work has not been confirmed stopped.",
+            "A run or manual read is active, or database work has not been confirmed stopped.",
             true,
         ),
     })?;
