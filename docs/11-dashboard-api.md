@@ -4,7 +4,7 @@
 
 ## 状態と承認対象
 
-DTO検証と状態遷移、ステップ3の開始・状態取得APIは実装済み。手動SELECT・SSE・画面は後続ステップ。
+DTO検証と状態遷移、開始・状態取得・手動SELECTのAPIは実装済み。SSEと画面は後続ステップ。
 
 [詳細実装手順](10-frontend-implementation-steps.md)の「契約・テスト → 承認 → 実装」に従い、承認されたステップ1のDTO検証と状態遷移を実装した。HTTPサーバー、SQL実行、runner、SSE送信、Vueの画面は後続ステップで別途テスト・シグネチャを提示する。
 
@@ -33,7 +33,7 @@ DTO検証と状態遷移、ステップ3の開始・状態取得APIは実装済�
 
 ## 2. HTTP契約
 
-下表のうち `GET /api/state`、`POST /api/runs`、`GET /api/runs/{id}` は実装済み。手動SELECTとSSEは契約のみ。
+下表の HTTP API は実装済み。SSE は契約のみ。
 
 | エンドポイント | 入力 | 正常応答 |
 | --- | --- | --- |
@@ -87,7 +87,7 @@ observed_atは「保持している値の取得に成功した時刻」。取得
 
 succeededのnullだけがSQL NULLを表す。pendingやfailedのnullをSQL NULLとして表示しない。run_idが現在のrunと異なる履歴、Sourceへの手動照会、失敗に成功値を付けた応答は拒否する。
 
-APIとSSEの結果は同じread_idで統合する。直近5件の履歴は取得時の値を保持し、自動監視や後の照会で上書きしない。履歴保持そのものの実装・テストはステップ5・10で扱う。
+直近5件の履歴は取得時の値を保持し、自動監視や後の照会で上書きしない。照会失敗のHTTP応答は `ApiError`、履歴内の同じ照会は `ManualRead` として記録する。APIとSSEの結果は同じread_idで統合する。
 
 ## 6. 状態遷移
 

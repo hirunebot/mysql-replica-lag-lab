@@ -24,6 +24,7 @@ pub fn marker_update() -> SqlStatement {
 }
 
 pub(crate) const MARKER_VALUE: &str = "SELECT value FROM lag_demo.marker WHERE id = 1";
+pub(crate) const MARKER_SUM: &str = "SELECT SUM(value) FROM lag_demo.marker;";
 pub(crate) const ITEM_COUNT: &str = "SELECT COUNT(*) FROM lag_demo.items";
 pub(crate) const UPDATED_COUNT: &str = "SELECT COUNT(*) FROM lag_demo.items WHERE version = 2";
 pub(crate) const UPDATED_BATCH_COUNT: &str =

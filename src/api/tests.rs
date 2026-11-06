@@ -66,6 +66,24 @@ async fn request(app: &Router, method: &str, uri: &str, body: Option<&str>) -> (
 async fn post_run(app: &Router, body: Value) -> (StatusCode, Value) {
     request(app, "POST", "/api/runs", Some(&body.to_string())).await
 }
+
+/// 固定のpreset以外を拒否し、存在しないrunをDBへ問い合わせない。
+#[tokio::test]
+async fn manual_read_rejects_unknown_run_and_custom_sql() {
+    let app = router(config()).unwrap();
+    let uri = "/api/runs/unknown/reads";
+    for invalid in [
+        r#"{"preset":"other"}"#,
+        r#"{"preset":"marker_sum","sql":"SELECT 1"}"#,
+    ] {
+        let (status, body) = request(&app, "POST", uri, Some(invalid)).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body["code"], "invalid_read");
+    }
+    let (status, body) = request(&app, "POST", uri, Some(r#"{"preset":"marker_sum"}"#)).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["code"], "run_not_found");
+}
 async fn until(app: &Router, id: &str, ready: impl Fn(&RunSnapshot) -> bool) -> RunSnapshot {
     tokio::time::timeout(Duration::from_secs(15), async {
         loop {

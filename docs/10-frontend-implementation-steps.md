@@ -218,6 +218,8 @@ Web実行の独立観測と同期判定を実装済み。[観測間隔・接続�
 
 ## ステップ5：手動SELECT APIを実装する
 
+固定SELECTと最新5件のサーバー履歴を実装済み。[手動SELECTのAPI](14-dashboard-http.md#手動select)を参照。
+
 ### 変更対象
 
 `src/api/reads.rs`、`src/database.rs`、`src/run_manager.rs`。
