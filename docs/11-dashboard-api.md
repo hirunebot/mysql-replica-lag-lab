@@ -60,6 +60,7 @@ OperationStateは `planned / running / committed / failed / outcome_unknown`。c
 Replicaの反映状態は別フィールド `unknown / pending / observed_applied / unavailable`。SourceがcommittedでもReplicaを自動的にobserved_appliedにしない。確認済みとする場合は観測時刻を持つ。
 
 seedの途中経過は `query_progress`。同じoperation_idのrunning状態に投入済み件数を持たせる。
+スキーマ準備とseedが次のSQLを発行するときは `query_statement` で計画内の同じIDを更新する。seedのID範囲とSQLは直近のINSERT、予定件数はseed全体を表す。
 
 Web実行ではコミット済みのUPDATEバッチを `pending` とし、Replicaで範囲のCOUNTを取得した結果は `replica_operation_observed` として通知する。最終同期で全件を確認した場合は終端スナップショットで残りのバッチも反映済みにする。
 

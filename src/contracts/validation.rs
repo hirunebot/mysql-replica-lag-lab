@@ -327,6 +327,22 @@ pub fn validate_event(e: &EventEnvelope) -> Result {
     use EventPayload::*;
     match &e.event {
         RunPhaseChanged { .. } => Ok(()),
+        QueryStatement { plan } => {
+            identifier(&plan.operation_id, "payload.plan.operation_id")?;
+            require(
+                plan.target == DatabaseTarget::Source
+                    && matches!(plan.kind, OperationKind::Setup | OperationKind::Seed),
+                ContractErrorCode::InconsistentOperation,
+                "payload.plan.kind",
+            )?;
+            for value in [&plan.first_id, &plan.last_id, &plan.planned_rows]
+                .into_iter()
+                .flatten()
+            {
+                decimal(value, "payload.plan.range")?;
+            }
+            Ok(())
+        }
         QueryStarted { operation: o }
         | QueryProgress { operation: o }
         | QueryCompleted { operation: o }

@@ -112,7 +112,10 @@ impl Journal {
     }
 
     pub(crate) fn statement(&self, id: &str, sql: SqlStatement, range: Option<(u64, u64)>) {
-        let mut p = self.state.lock().unwrap().snapshot.plan[self.indices[id]].clone();
+        let mut state = self.state.lock().unwrap();
+        let s = &mut state.snapshot;
+        let stored = &mut s.plan[self.indices[id]];
+        let mut p = stored.clone();
         p.sql = sql;
         if let Some((first, last)) = range {
             p.first_id = Some(first.to_string());
@@ -120,6 +123,13 @@ impl Journal {
             p.planned_rows = Some((last - first + 1).to_string());
         }
         self.reporter.statement(&p);
+        if self.dashboard && matches!(stored.kind, OperationKind::Setup | OperationKind::Seed) {
+            stored.sql = p.sql;
+            stored.first_id = p.first_id;
+            stored.last_id = p.last_id;
+            let plan = stored.clone();
+            self.emit(s, EventPayload::QueryStatement { plan });
+        }
     }
 
     fn next(s: &mut RunSnapshot) {

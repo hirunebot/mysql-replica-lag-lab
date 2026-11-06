@@ -350,6 +350,17 @@ impl Reporter for RunReporter {
                         r.snapshot.observations.push(observation.clone());
                     }
                 }
+                EventPayload::QueryStatement { plan } => {
+                    let Some(slot) = r
+                        .snapshot
+                        .plan
+                        .iter_mut()
+                        .find(|item| item.operation_id == plan.operation_id)
+                    else {
+                        return;
+                    };
+                    *slot = plan.clone();
+                }
                 EventPayload::StaleReadObserved { .. } => r.snapshot.stale_read_observed = true,
                 EventPayload::RunCompleted { snapshot } | EventPayload::RunFailed { snapshot } => {
                     r.terminal = Some((**snapshot).clone());
