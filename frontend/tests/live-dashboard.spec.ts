@@ -6,7 +6,7 @@ import idle from '../../tests/fixtures/dashboard/idle-state.json';
 import type { DashboardApi } from '../src/api/client.contract.ts';
 import { useRun } from '../src/composables/useRun.ts';
 import { applyRunEvent, type openRunEvents } from '../src/composables/useRunEvents.ts';
-import { decodeDashboardState, decodeRunSnapshot, type Observation } from '../src/types/api.ts';
+import { decodeDashboardState, decodeRunSnapshot, type ManualRead, type Observation } from '../src/types/api.ts';
 import type { EventEnvelope } from '../src/types/events.ts';
 import DatabaseComparison from '../src/components/DatabaseComparison.vue';
 
@@ -71,4 +71,68 @@ test('片側だけの失敗と前回値の時刻を表示し、実測した0を�
   expect(master.text()).not.toContain('取得失敗');
   expect(replica.text()).toContain('取得失敗 · 前回値');
   expect(replica.get('.big b').text()).toBe('0');
+});
+
+test('手動SELECTの応答とSSEを同じIDで統合し、run変更後の応答を捨てる', async () => {
+  const original = { ...decodeRunSnapshot(fixture), manual_reads: [] };
+  let current = original;
+  let callbacks!: Parameters<typeof openRunEvents>[1];
+  const api: DashboardApi = {
+    getState: vi.fn(async () => ({ ...decodeDashboardState(idle), server_instance_id: current.server_instance_id, current_run: current })),
+    getRun: vi.fn(async () => current), startRun: vi.fn(), readMarkerSum: vi.fn(),
+  };
+  const subscribe: typeof openRunEvents = (_, handlers) => {
+    callbacks = handlers;
+    return { close: vi.fn() } as unknown as EventSource;
+  };
+  const Harness = defineComponent({ setup() { return useRun(true, api, subscribe); }, template: '<div />' });
+  const wrapper = mount(Harness);
+  await flushPromises();
+  callbacks.open();
+  const read: ManualRead = {
+    read_id: 'read-zero', run_id: current.run_id, target: 'replica', preset: 'marker_sum',
+    sql: 'SELECT SUM(value) FROM lag_demo.marker;', status: 'succeeded', value: '0',
+    started_at: '2026-01-01T00:00:00Z', completed_at: '2026-01-01T00:00:01Z', elapsed_ms: 10, error: null,
+  };
+  let resolve!: (result: ManualRead) => void;
+  const result = () => new Promise<ManualRead>(done => { resolve = done; });
+  vi.mocked(api.readMarkerSum).mockImplementation(result);
+  const first = wrapper.vm.read();
+  await wrapper.vm.read();
+  expect(api.readMarkerSum).toHaveBeenCalledTimes(1);
+  resolve(read);
+  await first;
+  callbacks.event({ ...phase('43'), type: 'manual_read_started', payload: {
+    read: { ...read, status: 'pending', value: null, completed_at: null, elapsed_ms: null },
+  } });
+  expect(wrapper.vm.manualReads.map(item => item.value)).toEqual(['0']);
+  callbacks.event({ ...phase('44'), type: 'manual_read_completed', payload: { read } });
+  expect(wrapper.vm.manualReads).toHaveLength(1);
+  wrapper.vm.clearReads();
+  expect(wrapper.vm.manualReads).toHaveLength(0);
+  const old = wrapper.vm.read();
+  current = { ...original, run_id: 'next-run' };
+  await wrapper.vm.refresh();
+  resolve({ ...read, read_id: 'old-response' });
+  await old;
+  expect(wrapper.vm.snapshot?.run_id).toBe('next-run');
+  expect(wrapper.vm.manualReads).toHaveLength(0);
+  wrapper.unmount();
+});
+
+test('開始応答が不明ならPOSTを繰り返さずstateを取得する', async () => {
+  const state = decodeDashboardState(idle);
+  const online = { ...state, connections: state.connections.map(item => ({ ...item, status: 'available' as const, error: null })) };
+  const api: DashboardApi = {
+    getState: vi.fn().mockResolvedValue(online), getRun: vi.fn(),
+    startRun: vi.fn().mockRejectedValue(new TypeError('network error')), readMarkerSum: vi.fn(),
+  };
+  const Harness = defineComponent({ setup() { return useRun(true, api); }, template: '<div />' });
+  const wrapper = mount(Harness);
+  await flushPromises();
+  await wrapper.vm.start(online.default_config);
+  expect(api.startRun).toHaveBeenCalledOnce();
+  expect(api.getState).toHaveBeenCalledTimes(2);
+  expect(wrapper.vm.snapshot).toBeNull();
+  wrapper.unmount();
 });

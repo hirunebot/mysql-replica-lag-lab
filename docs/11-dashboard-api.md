@@ -94,6 +94,8 @@ succeededのnullだけがSQL NULLを表す。pendingやfailedのnullをSQL NULL�
 
 直近5件の履歴は取得時の値を保持し、自動監視や後の照会で上書きしない。照会失敗のHTTP応答は `ApiError`、履歴内の同じ照会は `ManualRead` として記録する。APIとSSEの結果は同じread_idで統合する。
 
+画面の「表示をクリア」は、その時点のread_idを現在のページで非表示にする。ページを再読み込みするとサーバーの直近履歴が戻る。
+
 ## 6. 状態遷移
 
 ```text
