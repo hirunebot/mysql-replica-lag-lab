@@ -1,5 +1,12 @@
 # トラブルシューティング
 
+## Webダッシュボードが表示されない
+
+- `Dashboard assets are missing` が表示されたら、`frontend/` で `npm ci && npm run build` を実行して再読み込みする。ビルドには `.node-version` の Node.js を使う。
+- Viteで「APIに接続できません」と表示されたら、`cargo run --release --bin server` が既定ポート3000で起動しているか確認する。
+- WSLでは、先にWSL内から `curl http://127.0.0.1:3000/api/state` を確認し、Windowsのブラウザから [http://localhost:3000/](http://localhost:3000/) を開く。
+- 画面にDB接続不可が表示されたら下記のコンテナとポートを確認する。前の実行が終了確認中の場合は、[サーバー再起動前の確認](14-dashboard-http.md) を参照する。Web、CLI、PHPのデモは一度に一つ実行する。
+
 ## 1. RustアプリがMySQLへ接続できない
 
 コンテナとポートを確認します。

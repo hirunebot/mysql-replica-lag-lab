@@ -1,5 +1,5 @@
 //! HTTPの公開境界。要求・応答にはステップ1の型をそのまま使う。
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use axum::{
     Json, Router,
@@ -7,10 +7,11 @@ use axum::{
         DefaultBodyLimit, Path, State,
         rejection::{JsonRejection, PathRejection},
     },
-    http::StatusCode,
-    response::{IntoResponse, Response},
+    http::{StatusCode, header},
+    response::{Html, IntoResponse, Response},
     routing::{get, post},
 };
+use tower_http::services::ServeDir;
 
 use crate::{
     config::Config,
@@ -24,6 +25,33 @@ mod reads;
 /// DBに接続せずHTTPルーターを構成する。到達確認は状態取得・実行時に行う。
 pub fn router(config: Config) -> anyhow::Result<Router> {
     Ok(router_with(RunManager::new(config)?))
+}
+
+/// 配信対象をビルド済みの入口とアセットに限定する。
+pub fn dashboard_router(config: Config, dist: PathBuf) -> anyhow::Result<Router> {
+    let index = dist.join("index.html");
+    let serve_index = move || {
+        let index = index.clone();
+        async move {
+            match tokio::fs::read_to_string(index).await {
+                Ok(page) => ([(header::CACHE_CONTROL, "no-cache")], Html(page)).into_response(),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "Dashboard assets are missing. Run npm ci and npm run build in frontend/.",
+                )
+                    .into_response(),
+                Err(_) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Could not read frontend/dist/index.html.",
+                )
+                    .into_response(),
+            }
+        }
+    };
+    Ok(router(config)?
+        .route("/", get(serve_index.clone()))
+        .route("/index.html", get(serve_index))
+        .nest_service("/assets", ServeDir::new(dist.join("assets"))))
 }
 
 fn router_with(manager: Arc<RunManager>) -> Router {

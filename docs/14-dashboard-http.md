@@ -1,4 +1,4 @@
-# ステップ3：HTTP API
+# ダッシュボードのHTTP API
 
 実DBを使う場合は先に [MySQLを起動・設定](02-usage.md) してから `cargo run --bin server` を実行する。DB停止中でもAPIは起動できる。既定は `127.0.0.1:3000`。変更する場合は `DASHBOARD_BIND_ADDR` にループバックのIP・ポートを指定する。
 

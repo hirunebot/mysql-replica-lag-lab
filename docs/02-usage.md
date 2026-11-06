@@ -15,6 +15,19 @@ cargo --version
 
 Source はホストの `3307`、Replica は `3308` を使用します。
 
+## Webダッシュボード
+
+Node.jsは `.node-version` の版を使う。初回起動の手順でMySQLを構成した後、プロジェクトルートでビルドしてAxumを起動する。
+
+```bash
+(cd frontend && npm ci && npm run build)
+cargo run --release --bin server
+```
+
+起動時に表示されるURLを開く。既定は [http://localhost:3000/](http://localhost:3000/)。WSLで起動した場合もWindowsブラウザで同じURLを開く。バインドはループバックのみ。Webの「開始」は `lag_demo` を再作成するため、CLI・PHP版・別プロセスのWeb版との同時実行は避ける。
+
+画面開発ではサーバーを既定のポート3000で起動し、別のターミナルで `cd frontend && npm ci && npm run dev` を実行する。Viteの既定URLは [http://localhost:5173/](http://localhost:5173/) で、`/api` はAxumへ転送される。
+
 ## 2. 初回起動
 
 プロジェクトルートで環境変数ファイルを作ります。
