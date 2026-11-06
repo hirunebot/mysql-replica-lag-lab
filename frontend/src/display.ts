@@ -1,6 +1,19 @@
-import type { OperationPlan } from './types/api.ts';
+import type { OperationPlan, RunPhase } from './types/api.ts';
 
 const numbers = new Intl.NumberFormat('ja-JP');
+const times = new Intl.DateTimeFormat('ja-JP', {
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short',
+});
+
+export const phaseLabel: Record<RunPhase, string> = {
+  idle: '実行前', preparing: '準備中', waiting_initial_sync: '初期同期中', running: '実行中',
+  waiting_final_sync: '最終同期中', completed: '同期完了', failing: '終了確認中', failed: '実行失敗',
+};
+
+export function formatTime(value: string): string {
+  return times.format(new Date(value));
+}
 
 export function formatDecimal(value?: string): string {
   return value === undefined ? '—' : numbers.format(BigInt(value));

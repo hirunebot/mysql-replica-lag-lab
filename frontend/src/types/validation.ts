@@ -1,5 +1,5 @@
 /** 型定義を読むときは不要。受信JSONの形と、状態間の整合を確認する。 */
-import type { DashboardState, RunSnapshot, OperationState, Observation, ManualRead } from './api.ts';
+import type { ApiError, DashboardState, RunSnapshot, OperationState, Observation, ManualRead } from './api.ts';
 import type { EventEnvelope } from './events.ts';
 
 type Check = (value: unknown, path: string) => void;
@@ -35,7 +35,12 @@ const timestamp: Check = (v,p) => {
 };
 const target = choice('source','replica');
 const phase = choice('idle','preparing','waiting_initial_sync','running','waiting_final_sync','failing','completed','failed');
-const error = nullable(object({code:str,message:str,retryable:bool}));
+const apiError = object({code:str,message:str,retryable:bool});
+const error = nullable(apiError);
+export function readApiError(input: unknown): ApiError {
+  apiError(input,'api_error');
+  return input as ApiError;
+}
 const config = object({demo_rows:decimal,seed_batch_size:decimal,heavy_batch_size:decimal,marker_after_batches:decimal});
 const replication = object({receiver_running:bool,applier_running:bool,seconds_behind_source:nullable(duration),
   relay_log_bytes:decimal,source_log_file:str,read_source_log_pos:decimal,relay_source_log_file:str,exec_source_log_pos:decimal});
@@ -85,6 +90,12 @@ function manualRead(r: ManualRead,run: string): void {
     : r.completed_at !== null && r.elapsed_ms !== null && (r.status === 'succeeded'
       ? r.error === null : r.value === null && r.error !== null);
   demand(valid,'read.status');
+}
+export function readManualRead(input: unknown, run: string): ManualRead {
+  readShape(input,'read');
+  const value = input as ManualRead;
+  manualRead(value,run);
+  return value;
 }
 function completed(s: RunSnapshot): void {
   const value = (target: string,metric: string) => {
