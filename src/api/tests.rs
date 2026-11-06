@@ -8,16 +8,20 @@ use std::{
 };
 
 use axum::{
-    body::{Body, to_bytes},
+    body::{Body, BodyDataStream, to_bytes},
     http::Request,
 };
+use futures_util::StreamExt;
 use serde_json::{Value, json};
 use tokio::sync::Notify;
 use tower::ServiceExt;
 
 use super::*;
 use crate::{
-    contracts::{ConnectionStatus, EventPayload, OperationStatus, RunPhase, validate_snapshot},
+    contracts::{
+        ConnectionStatus, EventEnvelope, EventPayload, OperationStatus, RunPhase, validate_event,
+        validate_snapshot,
+    },
     events::Reporter,
     runner::{PreflightFailure, RunnerConfig},
 };
@@ -39,6 +43,128 @@ fn config() -> Config {
         initial_sync_timeout: Duration::from_secs(2),
         final_sync_timeout: Duration::from_secs(2),
     }
+}
+
+/// 初回snapshotからの境界と、切断後に同じsequenceを送り直さない復帰を検証する。
+#[tokio::test]
+async fn event_stream_replays_changes_after_the_snapshot_and_resume_cursor() {
+    let proceed = Arc::new(Notify::new());
+    let gate = proceed.clone();
+    let app = router_with(
+        RunManager::with_engine(
+            config(),
+            Arc::new(move |_, reporter| {
+                let gate = gate.clone();
+                Box::pin(async move {
+                    gate.notified().await;
+                    for phase in [RunPhase::WaitingInitialSync, RunPhase::Running] {
+                        reporter.report(EventPayload::RunPhaseChanged { phase });
+                    }
+                    std::future::pending().await
+                })
+            }),
+        )
+        .unwrap(),
+    );
+    let (_, run) = post_run(&app, workload()).await;
+    let id = run["run_id"].as_str().unwrap();
+    let path = format!("/api/runs/{id}/events");
+    let (status, mut initial) = event_stream(&app, &path, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        matches!(read_event(&mut initial).await.event, EventPayload::Snapshot { snapshot } if snapshot.sequence == "0")
+    );
+    proceed.notify_one();
+    let first = read_event(&mut initial).await;
+    assert_eq!(first.sequence, "1");
+    assert!(matches!(
+        first.event,
+        EventPayload::RunPhaseChanged {
+            phase: RunPhase::WaitingInitialSync
+        }
+    ));
+    drop(initial);
+    let (status, mut replay) = event_stream(
+        &app,
+        &format!("{path}?after=wrong"),
+        Some(&format!("{id}:1")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let second = read_event(&mut replay).await;
+    assert_eq!(second.sequence, "2");
+    assert!(matches!(
+        second.event,
+        EventPayload::RunPhaseChanged {
+            phase: RunPhase::Running
+        }
+    ));
+
+    let (_, mut reset) = event_stream(&app, &format!("{path}?after=9999"), None).await;
+    assert!(
+        matches!(read_event(&mut reset).await.event, EventPayload::Snapshot { snapshot } if snapshot.sequence == "2")
+    );
+    assert_eq!(
+        event_stream(&app, &format!("{path}?after=01"), None)
+            .await
+            .0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        event_stream(&app, &path, Some("wrong-run:1")).await.0,
+        StatusCode::BAD_REQUEST
+    );
+    let restarted = router(config()).unwrap();
+    assert_eq!(
+        event_stream(&restarted, &path, None).await.0,
+        StatusCode::NOT_FOUND
+    );
+}
+
+async fn event_stream(
+    app: &Router,
+    path: &str,
+    last_event: Option<&str>,
+) -> (StatusCode, BodyDataStream) {
+    let mut request = Request::builder().uri(path);
+    if let Some(last) = last_event {
+        request = request.header("last-event-id", last);
+    }
+    let response = app
+        .clone()
+        .oneshot(request.body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    if response.status() == StatusCode::OK {
+        assert_eq!(response.headers()["content-type"], "text/event-stream");
+    }
+    (response.status(), response.into_body().into_data_stream())
+}
+
+async fn read_event(stream: &mut BodyDataStream) -> EventEnvelope {
+    let bytes = tokio::time::timeout(Duration::from_secs(2), stream.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let frame = std::str::from_utf8(&bytes).unwrap();
+    let data = frame
+        .lines()
+        .find_map(|line| line.strip_prefix("data: "))
+        .unwrap();
+    let event: EventEnvelope = serde_json::from_str(data).unwrap();
+    assert!(
+        frame
+            .lines()
+            .any(|line| line == format!("id: {}:{}", event.run_id, event.sequence))
+    );
+    assert!(
+        frame
+            .lines()
+            .any(|line| line == format!("event: {}", event.event.name()))
+    );
+    validate_event(&event).unwrap();
+    event
 }
 
 fn workload() -> Value {

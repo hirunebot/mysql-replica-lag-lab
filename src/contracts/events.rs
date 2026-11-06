@@ -30,6 +30,9 @@ pub enum EventPayload {
     QueryStarted {
         operation: OperationState,
     },
+    QueryProgress {
+        operation: OperationState,
+    },
     QueryCompleted {
         operation: OperationState,
     },
@@ -64,6 +67,27 @@ pub enum EventPayload {
     Snapshot {
         snapshot: Box<RunSnapshot>,
     },
+}
+
+impl EventPayload {
+    pub(crate) fn name(&self) -> &'static str {
+        match self {
+            Self::RunPhaseChanged { .. } => "run_phase_changed",
+            Self::QueryStarted { .. } => "query_started",
+            Self::QueryProgress { .. } => "query_progress",
+            Self::QueryCompleted { .. } => "query_completed",
+            Self::QueryFailed { .. } => "query_failed",
+            Self::ReplicaOperationObserved { .. } => "replica_operation_observed",
+            Self::DbObserved { .. } => "db_observed",
+            Self::StaleReadObserved { .. } => "stale_read_observed",
+            Self::ManualReadStarted { .. } => "manual_read_started",
+            Self::ManualReadCompleted { .. } => "manual_read_completed",
+            Self::ManualReadFailed { .. } => "manual_read_failed",
+            Self::RunCompleted { .. } => "run_completed",
+            Self::RunFailed { .. } => "run_failed",
+            Self::Snapshot { .. } => "snapshot",
+        }
+    }
 }
 
 // flattenとdeny_unknown_fieldsを併用せず、受信時だけ外側の項目を厳密に確認する。

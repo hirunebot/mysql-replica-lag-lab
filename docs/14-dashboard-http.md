@@ -8,6 +8,7 @@
 | 開始 | `POST /api/runs` | 202 / `preparing` の `RunSnapshot`。不正設定は400、実行枠が使用中なら409 |
 | 実行の取得 | `GET /api/runs/{id}` | 200 / 最新の `RunSnapshot`。知らないIDは404 |
 | 手動SELECT | `POST /api/runs/{id}/reads` | 200 / 完了した `ManualRead` |
+| 実行の通知 | `GET /api/runs/{id}/events` | 200 / SSE。現在の状態や続きの通知を配信 |
 
 ```sh
 curl -sS http://127.0.0.1:3000/api/runs -H 'Content-Type: application/json' \
@@ -18,7 +19,7 @@ curl -sS http://127.0.0.1:3000/api/runs -H 'Content-Type: application/json' \
 
 最新の1実行だけをメモリに保持し、HTTP切断で止めない。実行終了が不明なら `failing` と `completion_unconfirmed` を返し、次の開始を拒否する。再起動で履歴と排他枠は失われるため、停止・再起動の前後にはローカルDBの `SHOW FULL PROCESSLIST` と `SHOW REPLICA STATUS` で前のデモ処理が残っていないことを確認する。再起動でSQLは巻き戻らない。
 
-開始は `lag_demo` を作り直す。CLI版や別プロセスのサーバーとは同時に実行しない。SSEは後続ステップで追加する。
+開始は `lag_demo` を作り直す。CLI版や別プロセスのサーバーとは同時に実行しない。
 
 ## Web実行のDB観測
 
@@ -35,3 +36,9 @@ Webの書き込みはSourceに最大2接続、preflightはReplicaに1接続。pr
 `POST /api/runs/{id}/reads` に `{"preset":"marker_sum"}` を送る。Replicaの専用プール（上限1接続）で照会し、SUMを10進文字列またはSQL NULLとして返す。初期同期後から実行でき、成功と失敗を含む直近5件は現在のrunに保存する。
 
 準備中・照会中・置き換えられたrunは409、未知IDは404、DB接続不可は503、照会のタイムアウトは504。照会中は新規runの開始を409にし、ブラウザを閉じても結果を記録する。
+
+## SSE
+
+`curl -N http://127.0.0.1:3000/api/runs/{id}/events` で最初の `snapshot` と続きの通知を確認できる。接続維持のコメントは15秒間隔。再接続時は [SSEのカーソル規則](11-dashboard-api.md#2-http契約) に従う。
+
+履歴はrunごとに2,000件・4MiBまで。追いつけない購読者は最新のスナップショットから再開する。Webのseed INSERTは公開するSQLサイズを抑えるため1バッチ最大5,000行。CLIの設定上限は従来どおり。
