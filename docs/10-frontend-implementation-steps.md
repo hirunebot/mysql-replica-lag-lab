@@ -244,6 +244,8 @@ Web実行の独立観測と同期判定を実装済み。[観測間隔・接続�
 
 ## ステップ6：SSEとスナップショット復帰を実装する
 
+SSEの配信、履歴からの再送、最新スナップショットへの復帰を実装済み。[接続方法と上限](14-dashboard-http.md#sse)を参照。
+
 ### 変更対象
 
 `src/events.rs`、`src/api/events.rs`、`src/run_manager.rs`。

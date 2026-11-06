@@ -21,6 +21,7 @@ use crate::{
 };
 
 mod reads;
+mod stream;
 pub(crate) use reads::ReadError;
 
 type RunFuture = Pin<Box<dyn Future<Output = anyhow::Result<RunOutcome>> + Send>>;
@@ -50,6 +51,7 @@ struct CurrentRun {
     schema_observed: bool,
     terminal: Option<RunSnapshot>,
     sequence: u64,
+    history: stream::History,
 }
 
 impl CurrentRun {
@@ -67,6 +69,11 @@ impl CurrentRun {
     fn advance(&mut self) {
         self.sequence += 1;
         self.snapshot.sequence = self.sequence.to_string();
+    }
+
+    fn publish(&mut self, event: EventPayload) {
+        self.advance();
+        self.record(event);
     }
 }
 
@@ -212,6 +219,7 @@ impl RunManager {
                 schema_observed: false,
                 terminal: None,
                 sequence: 0,
+                history: stream::History::default(),
             });
         }
         let id = snapshot.run_id.clone();
@@ -281,6 +289,12 @@ impl RunManager {
             ));
         }
         run.advance();
+        let snapshot = Box::new(run.snapshot.clone());
+        run.record(match run.snapshot.phase {
+            RunPhase::Completed => EventPayload::RunCompleted { snapshot },
+            RunPhase::Failed => EventPayload::RunFailed { snapshot },
+            _ => EventPayload::Snapshot { snapshot },
+        });
     }
 }
 
@@ -302,12 +316,12 @@ impl RunReporter {
 impl Reporter for RunReporter {
     fn report(&self, event: EventPayload) {
         self.update(|r| {
-            match event {
+            match &event {
                 EventPayload::RunPhaseChanged { phase }
-                    if can_transition(r.snapshot.phase, phase) =>
+                    if can_transition(r.snapshot.phase, *phase) =>
                 {
-                    r.snapshot.phase = phase;
-                    r.schema_observed |= phase == RunPhase::Running;
+                    r.snapshot.phase = *phase;
+                    r.schema_observed |= *phase == RunPhase::Running;
                 }
                 EventPayload::QueryStarted { operation }
                 | EventPayload::QueryCompleted { operation }
@@ -319,7 +333,7 @@ impl Reporter for RunReporter {
                         .iter_mut()
                         .find(|o| o.operation_id == operation.operation_id)
                     {
-                        *slot = operation;
+                        *slot = operation.clone();
                     }
                 }
                 EventPayload::DbObserved { observation } => {
@@ -331,19 +345,19 @@ impl Reporter for RunReporter {
                             o.target == observation.target && o.metric == observation.metric
                         })
                     {
-                        *slot = observation;
+                        *slot = observation.clone();
                     } else {
-                        r.snapshot.observations.push(observation);
+                        r.snapshot.observations.push(observation.clone());
                     }
                 }
                 EventPayload::StaleReadObserved { .. } => r.snapshot.stale_read_observed = true,
                 EventPayload::RunCompleted { snapshot } | EventPayload::RunFailed { snapshot } => {
-                    r.terminal = Some(*snapshot);
+                    r.terminal = Some((**snapshot).clone());
                     return;
                 }
                 _ => return,
             }
-            r.advance();
+            r.publish(event);
         });
     }
 
@@ -356,16 +370,22 @@ impl Reporter for RunReporter {
                 .find(|o| o.operation_id == operation.operation_id)
             {
                 *slot = operation.clone();
-                r.advance();
+                r.publish(EventPayload::QueryProgress {
+                    operation: operation.clone(),
+                });
             }
         });
     }
 }
 
 fn validate_web(config: &RunConfig) -> anyhow::Result<()> {
-    let [rows, _, heavy, marker] = runner::parse_workload(config)?;
+    let [rows, seed, heavy, marker] = runner::parse_workload(config)?;
     let batches = rows.div_ceil(heavy);
     ensure!(rows <= 10_000_000, "demo_rows must be at most 10000000");
+    ensure!(
+        seed.min(rows) <= 5_000,
+        "a seed INSERT may contain at most 5000 rows"
+    );
     ensure!(batches <= 1_000, "at most 1000 heavy batches are allowed");
     ensure!(
         marker < batches,

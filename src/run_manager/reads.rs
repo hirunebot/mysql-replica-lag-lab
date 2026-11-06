@@ -124,7 +124,7 @@ impl RunManager {
         };
         run.snapshot.manual_reads.insert(0, read.clone());
         run.snapshot.manual_reads.truncate(5);
-        run.advance();
+        run.publish(EventPayload::ManualReadStarted { read: read.clone() });
         Ok(read)
     }
 
@@ -160,7 +160,11 @@ impl RunManager {
             })
             .ok_or(ReadError::Stale)?;
         *pending = read.clone();
-        run.advance();
+        run.publish(if result.is_ok() {
+            EventPayload::ManualReadCompleted { read: read.clone() }
+        } else {
+            EventPayload::ManualReadFailed { read: read.clone() }
+        });
         result.map(|_| read)
     }
 }

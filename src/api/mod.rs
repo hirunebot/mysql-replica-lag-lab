@@ -18,6 +18,7 @@ use crate::{
     run_manager::{RunManager, StartError},
 };
 
+mod events;
 mod reads;
 
 /// DBに接続せずHTTPルーターを構成する。到達確認は状態取得・実行時に行う。
@@ -30,6 +31,7 @@ fn router_with(manager: Arc<RunManager>) -> Router {
         .route("/api/state", get(state))
         .route("/api/runs", post(start).layer(DefaultBodyLimit::max(4096)))
         .route("/api/runs/{id}", get(run))
+        .route("/api/runs/{id}/events", get(events::get))
         .route(
             "/api/runs/{id}/reads",
             post(reads::post).layer(DefaultBodyLimit::max(256)),

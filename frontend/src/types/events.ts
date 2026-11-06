@@ -4,7 +4,7 @@ import { readEventEnvelope } from './validation.ts';
 
 export type EventPayload =
   | { type: 'run_phase_changed'; payload: { phase: RunPhase } }
-  | { type: 'query_started' | 'query_completed' | 'query_failed'; payload: { operation: OperationState } }
+  | { type: 'query_started' | 'query_progress' | 'query_completed' | 'query_failed'; payload: { operation: OperationState } }
   | { type: 'replica_operation_observed'; payload: { operation: OperationState } }
   | { type: 'db_observed'; payload: { observation: Observation } }
   | { type: 'stale_read_observed'; payload: { source_value: DecimalString; replica_value: DecimalString } }

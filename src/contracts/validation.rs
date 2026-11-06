@@ -328,11 +328,15 @@ pub fn validate_event(e: &EventEnvelope) -> Result {
     match &e.event {
         RunPhaseChanged { .. } => Ok(()),
         QueryStarted { operation: o }
+        | QueryProgress { operation: o }
         | QueryCompleted { operation: o }
         | QueryFailed { operation: o } => {
             operation(o)?;
             let valid = match &e.event {
                 QueryStarted { .. } => o.status == OperationStatus::Running,
+                QueryProgress { .. } => {
+                    o.status == OperationStatus::Running && o.affected_rows.is_some()
+                }
                 QueryCompleted { .. } => o.status == OperationStatus::Committed,
                 _ => matches!(
                     o.status,

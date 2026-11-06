@@ -139,6 +139,7 @@ export function readEventEnvelope(input: unknown): EventEnvelope {
   const type = (input as {type?:unknown}).type;
   const payloads: Record<string,Check> = {
     run_phase_changed:object({phase}),query_started:object({operation:operationShape}),
+    query_progress:object({operation:operationShape}),
     query_completed:object({operation:operationShape}),query_failed:object({operation:operationShape}),
     replica_operation_observed:object({operation:operationShape}),
     db_observed:object({observation:observationShape}),
@@ -153,7 +154,8 @@ export function readEventEnvelope(input: unknown): EventEnvelope {
     const o = e.payload.operation; operation(o);
     if (type === 'replica_operation_observed') {
       demand(o.status === 'committed' && o.replica_status !== 'unknown' && o.replica_observed_at !== null,'event.operation.replica_status');
-    } else demand(type === 'query_started' ? o.status === 'running' : type === 'query_completed'
+    } else demand(type === 'query_progress' ? o.status === 'running' && o.affected_rows !== null
+      : type === 'query_started' ? o.status === 'running' : type === 'query_completed'
       ? o.status === 'committed' : ['failed','outcome_unknown'].includes(o.status),'event.operation.status');
   } else if ('observation' in e.payload) observation(e.payload.observation);
   else if ('source_value' in e.payload) demand(e.payload.source_value === '1' && e.payload.replica_value !== '1','event.stale');

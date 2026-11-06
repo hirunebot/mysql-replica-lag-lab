@@ -4,7 +4,7 @@
 
 ## 状態と承認対象
 
-DTO検証と状態遷移、開始・状態取得・手動SELECTのAPIは実装済み。SSEと画面は後続ステップ。
+DTO検証と状態遷移、開始・状態取得・手動SELECT・SSEは実装済み。画面は後続ステップ。
 
 [詳細実装手順](10-frontend-implementation-steps.md)の「契約・テスト → 承認 → 実装」に従い、承認されたステップ1のDTO検証と状態遷移を実装した。HTTPサーバー、SQL実行、runner、SSE送信、Vueの画面は後続ステップで別途テスト・シグネチャを提示する。
 
@@ -33,7 +33,7 @@ DTO検証と状態遷移、開始・状態取得・手動SELECTのAPIは実装�
 
 ## 2. HTTP契約
 
-下表の HTTP API は実装済み。SSE は契約のみ。
+下表の API は実装済み。
 
 | エンドポイント | 入力 | 正常応答 |
 | --- | --- | --- |
@@ -42,6 +42,8 @@ DTO検証と状態遷移、開始・状態取得・手動SELECTのAPIは実装�
 | `GET /api/runs/{id}` | run_id | 200 / RunSnapshot |
 | `POST /api/runs/{id}/reads` | `{"preset":"marker_sum"}` | 200 / 完了したManualRead |
 | `GET /api/runs/{id}/events` | Last-Event-IDまたはafter | 200 / SSE |
+
+SSEの `event` はJSONの `type` と同じ。`id` は `{run_id}:{sequence}`。再接続では `Last-Event-ID` を優先し、ヘッダーがなければ `after` を使う。`after` は先頭ゼロなしの10進sequence。カーソルなし、履歴外、現在より先のsequenceでは `snapshot` を返す。履歴内では指定sequenceの次から返す。形式不正やヘッダーのrun ID不一致は400、サーバーが保持していないrunは404。
 
 エラー応答は `{ "code": "...", "message": "...", "retryable": false }`。不正要求400、未知run404、実行競合・not_ready409、DB利用不可503、手動照会タイムアウト504を基本とする。
 
@@ -56,6 +58,8 @@ OperationPlanは対象、SQLテンプレートとバインド値、ID範囲、�
 OperationStateは `planned / running / committed / failed / outcome_unknown`。committedには完了時刻・実績件数・所要時間が必要。SQLを送った後に接続が失われた場合は、結果不明を未反映と扱わない。
 
 Replicaの反映状態は別フィールド `unknown / pending / observed_applied / unavailable`。SourceがcommittedでもReplicaを自動的にobserved_appliedにしない。確認済みとする場合は観測時刻を持つ。
+
+seedの途中経過は `query_progress`。同じoperation_idのrunning状態に投入済み件数を持たせる。
 
 Web実行ではコミット済みのUPDATEバッチを `pending` とし、Replicaで範囲のCOUNTを取得した結果は `replica_operation_observed` として通知する。最終同期で全件を確認した場合は終端スナップショットで残りのバッチも反映済みにする。
 
