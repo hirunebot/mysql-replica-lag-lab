@@ -1,23 +1,25 @@
-# Dashboard API・状態モデル：ステップ1 承認用
+# Dashboard API・状態モデル：ステップ1
+
+型が多く感じる場合は、先に [今読む型のガイド](12-contracts-reading-guide.md) を参照してください。中心になる4つの概念から読み、SSEや細かな状態の型は必要になってから確認できます。
 
 ## 状態と承認対象
 
-**契約・テストを先に作成した段階。処理本体は未実装。**
+ステップ1のDTO検証と状態遷移は実装済み。通信・DB操作・画面は後続ステップで実装する。
 
-[詳細実装手順](10-frontend-implementation-steps.md)の「契約・テスト → 承認 → 実装」に従う。今回確認していただくのはデータ形式、状態遷移、検証の期待値。承認後に実装する範囲は、DTOの検証と状態遷移の判定だけとする。HTTPサーバー、SQL実行、runner、SSE送信、Vueの画面は後続ステップで別途テスト・シグネチャを提示する。
+[詳細実装手順](10-frontend-implementation-steps.md)の「契約・テスト → 承認 → 実装」に従い、承認されたステップ1のDTO検証と状態遷移を実装した。HTTPサーバー、SQL実行、runner、SSE送信、Vueの画面は後続ステップで別途テスト・シグネチャを提示する。
 
 | ファイル | 今回の役割 |
 | --- | --- |
-| `src/contracts.rs` | Rustの公開DTO、検証エラー、検証・状態遷移の未実装シグネチャ |
+| `src/contracts.rs` | Rustの公開DTO、検証エラー、状態遷移。検証の詳細はcontracts/validation.rs |
 | `src/lib.rs` | DTOを結合テストから参照するための公開境界 |
 | `tests/dashboard_contracts.rs` | Rust側の契約・シリアライズ・状態遷移テスト |
 | `tests/fixtures/dashboard/` | RustとTypeScriptで共有するJSON例 |
-| `frontend/src/types/api.ts` | TypeScript型と未実装decoder |
+| `frontend/src/types/api.ts` | TypeScript型とdecoder。検証の詳細はvalidation.ts |
 | `frontend/src/api/client.contract.ts` | HTTPクライアントの宣言のみ。通信処理は未実装 |
 | `frontend/tests/contracts.test.ts` | JSONからの型検証・異常値拒否のテスト |
 | `Cargo.toml` | DTO用Serde、テスト用serde_jsonの依存宣言 |
 
-既存CLIのmain・SQL・デモの実行手順は変更していない。新しい関数は明示的な未実装エラーを返すため、呼び出しても仮の成功結果は得られない。
+既存CLIのmain・SQL・デモの実行手順は変更していない。検証処理はRustの `src/contracts/validation.rs` とTypeScriptの `frontend/src/types/validation.ts`、SSEの型は各eventsファイルに分離した。公開importとJSON形式は維持している。
 
 ## 1. 画面とAPIの語彙
 
@@ -110,7 +112,7 @@ idle → preparing → waiting_initial_sync → running → waiting_final_sync �
 
 遷移判定関数は遷移の形だけを確認する。実DBの最終確認はrunnerが担当する。RunSnapshotの検証でも、completedなのに更新が未完了、反映件数の根拠がない、両markerが不一致、レプリケーションが不健全、といった矛盾したデータは拒否する。
 
-## 7. 承認後に実装する関数
+## 7. 実装済みの検証関数
 
 ```rust
 pub fn validate_snapshot(snapshot: &RunSnapshot) -> Result<(), ContractError>;
@@ -155,17 +157,18 @@ node --test frontend/tests/contracts.test.ts
 
 # Rust toolchainがある環境で実行
 cargo test --test dashboard_contracts
-cargo test --bin mysql-replica-lag-lab
+cargo test --lib
 cargo fmt --check
 ```
 
 NodeのネイティブTypeScript実行は型を除去するだけで、型チェックではない。Vue / Vitest / vue-tscの導入はステップ7に残す。承認後のDTO検証実装時にはTypeScriptコンパイラによる型チェックも実施する。
 
-Rustの依存宣言にはSerdeとserde_jsonを追加しているが、この環境にはcargoがなく、Cargo.lockの再生成とRustテストは未実施。既存lockfileにも両パッケージは存在するが、直接依存への変更を含め、承認後の検証でCargoに整合させる。未実施を成功とは扱わない。
+serde_jsonはSSEの厳密な受信処理にも使用するため通常依存とし、Cargo.lockを整合させた。Rustのnullable項目はnullの明示を必須とし、省略をNoneとして補完しない。SSEは外側とpayload内の未知項目も拒否する。
 
-### 今回の実行結果
+### 実装後の検証結果
 
-- TypeScript：17件実行、17件失敗。すべて承認待ちスタブの `Not implemented` による想定した失敗。合格・skipは0件。
-- Rust：未実行。cargo / rustc / rustfmtが利用できないため、コンパイル・テスト・書式の確認は残っている。
-- JSON fixture：5ファイルとも構文解析可能であることを確認。
-- 処理本体・HTTP通信・DB操作・Vue画面：今回の差分では実装していない。
+- Rust：契約テスト21件と既存CLI単体テスト8件が成功。
+- TypeScript：契約テスト20件が成功。公開型・decoder・APIクライアント宣言をstrictモードで型チェック。
+- 正常な完了を受理する例と、その根拠を壊した例、必須nullable項目の欠落、SSE未知項目、全64組の状態遷移を追加検証。
+- 完了時には各DBのtotal_rows / updated_rowsが設定行数と一致し、両markerが1、Replicaのreceiver / applierが稼働中で、計画の全処理がcommittedであることを要求する。stale read未観測でも正常な同期完了は受理する。
+- HTTP通信・DB操作・Vue画面は未実装。実DBのE2Eは今回実行していない。
