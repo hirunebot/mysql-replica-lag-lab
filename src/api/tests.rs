@@ -142,11 +142,16 @@ async fn event_stream(
 }
 
 async fn read_event(stream: &mut BodyDataStream) -> EventEnvelope {
-    let bytes = tokio::time::timeout(Duration::from_secs(2), stream.next())
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
+    let bytes = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let bytes = stream.next().await.unwrap().unwrap();
+            if !bytes.starts_with(b":") {
+                break bytes;
+            }
+        }
+    })
+    .await
+    .unwrap();
     let frame = std::str::from_utf8(&bytes).unwrap();
     let data = frame
         .lines()
@@ -209,6 +214,51 @@ async fn manual_read_rejects_unknown_run_and_custom_sql() {
     let (status, body) = request(&app, "POST", uri, Some(r#"{"preset":"marker_sum"}"#)).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body["code"], "run_not_found");
+}
+
+/// 画面未ビルドでもAPIは起動し、未知APIにHTMLを返さない。
+#[tokio::test]
+async fn static_dashboard_serves_assets_without_taking_over_api_errors() {
+    let dist = std::env::temp_dir().join(format!("lag-lab-static-{}", uuid::Uuid::new_v4()));
+    let app = dashboard_router(config(), dist.clone()).unwrap();
+    let get = |uri: &str| {
+        app.clone()
+            .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+    };
+    let missing = get("/").await.unwrap();
+    assert_eq!(missing.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert!(
+        to_bytes(missing.into_body(), 1024)
+            .await
+            .unwrap()
+            .ends_with(b"in frontend/.")
+    );
+    let (status, body) = request(&app, "GET", "/api/unknown", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["code"], "run_not_found");
+
+    std::fs::create_dir_all(dist.join("assets")).unwrap();
+    std::fs::write(dist.join("index.html"), "<title>dashboard</title>").unwrap();
+    std::fs::write(dist.join("assets/app.js"), "console.log('dashboard')").unwrap();
+    let page = get("/").await.unwrap();
+    assert_eq!(page.status(), StatusCode::OK);
+    assert!(
+        page.headers()["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("text/html")
+    );
+    let asset = get("/assets/app.js").await.unwrap();
+    assert_eq!(asset.status(), StatusCode::OK);
+    assert_eq!(
+        to_bytes(asset.into_body(), 1024).await.unwrap(),
+        "console.log('dashboard')"
+    );
+    assert_eq!(
+        get("/assets/missing.js").await.unwrap().status(),
+        StatusCode::NOT_FOUND
+    );
+    std::fs::remove_dir_all(dist).unwrap();
 }
 async fn until(app: &Router, id: &str, ready: impl Fn(&RunSnapshot) -> bool) -> RunSnapshot {
     tokio::time::timeout(Duration::from_secs(15), async {

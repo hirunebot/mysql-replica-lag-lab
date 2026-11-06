@@ -1,6 +1,6 @@
 # mysql-replica-lag-lab
 
-MySQL の非同期レプリケーションで、先行する大量更新の適用が後続の軽い更新を待たせ、Source と Replica で一時的に異なるデータが読める状況を再現するラボです。負荷の投入と観測は、同じシナリオを実装したRustまたはPHPのCLIアプリケーションから行えます。
+MySQL の非同期レプリケーションで、先行する大量更新の適用が後続の軽い更新を待たせ、Source と Replica で一時的に異なるデータが読める状況を再現するラボです。Rust・PHPのCLIと、Rustを使うWebダッシュボードから実行できます。
 
 ```text
 Source:  大量更新 A1, A2, ... をコミット → 軽い marker 更新をコミット
@@ -13,6 +13,7 @@ Replica: A1 を適用 → A2 を適用 → ... → marker は relay log 内で�
 
 - Docker Desktop または Docker Engine + Compose v2
 - Rust版: Rust stable と Cargo
+- Web版: `.node-version` に記載の Node.js と npm
 - PHP版のローカル実行: PHP 8.2以上、PDO、`pdo_mysql`、`pcntl`
 - Source 用の `3307`、Replica 用の `3308` ポート
 
@@ -24,6 +25,15 @@ docker compose up -d --wait
 ./scripts/configure-replication.sh
 cargo run --release
 ```
+
+Webダッシュボードを使う場合は、DBの構成後に以下を実行して [localhost:3000](http://localhost:3000/) を開きます。
+
+```bash
+(cd frontend && npm ci && npm run build)
+cargo run --release --bin server
+```
+
+Web、Rust CLI、PHP CLIの実行は同じDBを使うため、同時に開始しないでください。[開発プロキシ・WSLでの起動手順](docs/02-usage.md#webダッシュボード)
 
 PHP版をローカルPHPで実行する場合:
 

@@ -8,7 +8,7 @@ use axum::{
         sse::{Event, KeepAlive, Sse},
     },
 };
-use futures_util::stream;
+use futures_util::{StreamExt, stream};
 use serde::Deserialize;
 
 use super::HttpError;
@@ -50,7 +50,11 @@ pub(super) async fn get(
             .data(&frame.json);
         Some((Ok::<_, Infallible>(event), subscription))
     });
-    Ok(Sse::new(frames).keep_alive(KeepAlive::new().interval(Duration::from_secs(15))))
+    // 通知のないrunでもヘッダーをすぐ転送できるよう、最初のコメントを送る。
+    let connected =
+        stream::once(async { Ok::<_, Infallible>(Event::default().comment("connected")) });
+    Ok(Sse::new(connected.chain(frames))
+        .keep_alive(KeepAlive::new().interval(Duration::from_secs(15))))
 }
 
 fn parse_sequence(value: &str) -> Result<u64, HttpError> {

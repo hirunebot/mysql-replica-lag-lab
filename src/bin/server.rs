@@ -1,4 +1,4 @@
-use std::{env, net::SocketAddr};
+use std::{env, net::SocketAddr, path::PathBuf};
 
 use anyhow::{Context, ensure};
 use mysql_replica_lag_lab::{api, config::Config};
@@ -14,14 +14,12 @@ async fn main() -> anyhow::Result<()> {
         addr.ip().is_loopback(),
         "DASHBOARD_BIND_ADDR must be a loopback address"
     );
-    let app = api::router(Config::from_env()?)?;
+    let dist = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("frontend/dist");
+    let app = api::dashboard_router(Config::from_env()?, dist)?;
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .context("failed to bind dashboard API")?;
-    println!(
-        "Dashboard API listening on http://{}",
-        listener.local_addr()?
-    );
+    println!("Dashboard listening on http://{}/", listener.local_addr()?);
     axum::serve(listener, app)
         .await
         .context("dashboard HTTP server stopped")
