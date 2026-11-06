@@ -155,13 +155,15 @@ API上の行数・ID・marker値・SUMは10進文字列に統一し、JavaScript
 
 ## ステップ3：Axumと実行管理を追加する
 
+開始・状態取得の3つのAPIを実装済み。[起動と検証](14-dashboard-http.md)を参照。SSEと手動SELECTは後続ステップ。
+
 ### 変更対象
 
 `src/bin/server.rs`、`src/api/`、`src/run_manager.rs`、`Cargo.toml`。
 
 ### 作業
 
-- Axum、Serde / serde_json、SSE用ストリーム、時刻・ID生成に必要な依存を追加し、Cargo.lockを更新する。
+- AxumとID生成の依存を追加し、既存のSerdeと時刻処理を使う。SSEの配信処理はステップ6で追加する。
 - バインド先は既定 `127.0.0.1:3000`。DB設定は既存環境変数から取得する。
 - HTTP受付はDB停止時にも起動し、stateに接続不可を返せるようにする。DBエラーでWebサーバー全体を終了させない。
 - 最新runとスナップショットをメモリ保持する。run_idは再起動・再実行で衝突しない値とする。

@@ -18,7 +18,7 @@ RunSnapshotの `plan` と `operations` は同じ `operation_id` で対応しま�
 
 ## 実行のライフサイクルと型
 
-次の図は、型が表す予定の実行ライフサイクルです。状態遷移とデータの検証は実装済みですが、この順序を実際に動かす共通runner・HTTP・画面は後続ステップで実装します。
+次の図は、共通runnerとHTTP APIが返す実行ライフサイクルです。画面とSSE配信は後続ステップです。
 
 ```mermaid
 flowchart TD
