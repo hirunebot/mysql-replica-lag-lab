@@ -1,15 +1,20 @@
 use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant},
 };
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use sqlx::MySqlPool;
 
-use crate::{config::Config, database};
+use crate::{
+    config::Config,
+    contracts::{
+        DatabaseTarget::{Replica, Source},
+        ObservationMetric::Marker,
+    },
+    database,
+    runner::{Journal, replica_status},
+};
 
 #[derive(Debug)]
 pub struct MarkerObservation {
@@ -36,30 +41,31 @@ pub async fn wait_for_marker(
     source: &MySqlPool,
     replica: &MySqlPool,
     expected_value: u64,
-    heavy_progress: Arc<AtomicU64>,
+    heavy_progress: &AtomicU64,
     config: &Config,
+    j: &Journal,
 ) -> Result<MarkerObservation> {
     let started = Instant::now();
     let mut tracker = MarkerTracker::default();
 
-    println!();
-    println!(
+    j.line(format_args!(""));
+    j.line(format_args!(
         "elapsed | Source marker | Replica marker | lag(s) | relay(bytes) | read-pos | exec-pos | heavy"
-    );
+    ));
 
     loop {
-        let (source_marker, replica_marker, status) = tokio::try_join!(
-            database::marker_value(source),
-            database::marker_value(replica),
-            database::replica_status(replica),
-        )?;
-        let status = status.context("replication status disappeared while monitoring")?;
+        let (source_marker, replica_marker, status) = tokio::join!(
+            j.decimal(Source, Marker, database::marker_value(source)),
+            j.decimal(Replica, Marker, database::marker_value(replica)),
+            j.replication(replica_status(replica)),
+        );
+        let (source_marker, replica_marker, status) = (source_marker?, replica_marker?, status?);
         let completed_batches = heavy_progress.load(Ordering::Relaxed);
         let lag = status
             .seconds_behind_source
             .map_or_else(|| "NULL".to_owned(), |value| value.to_string());
 
-        println!(
+        j.line(format_args!(
             "{:>6.2}s | {:>13} | {:>14} | {:>6} | {:>12} | {:>8} | {:>8} | {}/{}",
             started.elapsed().as_secs_f64(),
             source_marker,
@@ -70,7 +76,11 @@ pub async fn wait_for_marker(
             status.exec_source_log_pos,
             completed_batches,
             config.total_heavy_batches(),
-        );
+        ));
+
+        if source_marker == expected_value && replica_marker != expected_value {
+            j.stale(source_marker, replica_marker);
+        }
 
         if tracker.observe(source_marker, replica_marker, expected_value) {
             return Ok(MarkerObservation {

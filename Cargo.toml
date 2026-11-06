@@ -2,15 +2,15 @@
 name = "mysql-replica-lag-lab"
 version = "0.1.0"
 edition = "2024"
+default-run = "mysql-replica-lag-lab"
 description = "A reproducible MySQL replica lag demonstration written in Rust"
 license = "MIT"
 
 [dependencies]
 anyhow = "1.0"
+chrono = { version = "0.4", default-features = false, features = ["now"] }
 dotenvy = "0.15"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 sqlx = { version = "0.8", default-features = false, features = ["mysql", "runtime-tokio-rustls"] }
 tokio = { version = "1.47", features = ["macros", "rt-multi-thread", "sync", "time"] }
-
-[dev-dependencies]
-serde_json = "1.0"

@@ -76,7 +76,9 @@ Rust application
 | `src/setup.rs` | スキーマ再作成、seed、初期・最終同期待ち |
 | `src/workload.rs` | 大量更新の生成、軽いmarker更新 |
 | `src/monitor.rs` | Source / Replica の差とlagの時系列表示 |
-| `src/main.rs` | デモ全体のオーケストレーション |
+| `src/main.rs` | CLIの設定読み込み、表示、終了コード |
+| `src/runner.rs` | デモ全体の実行計画、並行処理、失敗時の終了管理 |
+| `src/queries.rs` / `src/events.rs` | 実行と表示で共有するSQL、実行通知の受け口 |
 | `php/bin/demo.php` | PHP版のエントリーポイント |
 | `php/src/` | PHP版の設定、DB操作、forkワーカー、監視 |
 | `php/Dockerfile` | PDO MySQLとpcntlを含むPHP CLI環境 |
@@ -93,7 +95,9 @@ Rust application
 8. [テスト計画](docs/08-test-plan.md)
 9. [可視化フロントエンド 実装計画](docs/09-frontend-implementation-plan.md)
 10. [フロントエンド 詳細実装手順](docs/10-frontend-implementation-steps.md)
-11. [Dashboard API・状態モデル（ステップ1 承認用）](docs/11-dashboard-api.md)
+11. [Dashboard API・状態モデル](docs/11-dashboard-api.md)
+12. [今読む型のガイド](docs/12-contracts-reading-guide.md)
+13. [共通runnerの契約と検証](docs/13-runner-contract.md)
 
 ## 開発時の確認
 

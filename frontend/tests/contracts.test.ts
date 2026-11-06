@@ -1,4 +1,4 @@
-/** 承認用の先行テスト。承認前のため、検証関数の本体は未実装。
+/** 通信契約の正常系と、不正な形式・状態の拒否を検証する。
  * Node 24以上で実行：node --test frontend/tests/contracts.test.ts
  * ネイティブの型除去ではテストを実行できるが、TypeScriptの型チェックは行われない。
  */
@@ -73,7 +73,7 @@ test('未対応のスキーマバージョン・必須項目の欠落・認証�
 });
 
 test('不正な日時・UTC以外の時刻・非有限または負の所要時間を拒否する', () => {
-  for (const value of ['not-a-date', '2026-02-30T09:00:00Z', '2026-11-01T18:00:00+09:00']) {
+  for (const value of ['not-a-date', '+026-11-01T09:00:00Z', '2026-02-30T09:00:00Z', '2026-11-01T18:00:00+09:00']) {
     const input = snapshot(); input.observations[0].observed_at = value; expectRejected(input);
   }
   for (const value of [-1, Infinity, NaN]) {
@@ -137,4 +137,42 @@ test('実行前にDBが利用できなくても、存在しない実行を完了
   assert.equal(result.current_run, null);
   assert.equal(result.connections[1].status, 'unavailable');
   assert.deepEqual(result, input);
+});
+
+function completedSnapshot(): any {
+  const s = snapshot();
+  s.phase = 'completed'; s.stale_read_observed = false;
+  s.operations = s.operations.map((o: any) => ({...s.operations[0], operation_id:o.operation_id}));
+  const template = s.observations[0];
+  s.observations = ['source','replica'].flatMap(target => ['total_rows','updated_rows','marker'].map(metric => ({
+    ...template,target,metric,value:{kind:'decimal',value:metric === 'marker' ? '1' : s.config.demo_rows},
+  })));
+  s.observations.push(fixture('observations').unknown_replication_lag);
+  return s;
+}
+
+test('stale read未観測でも全更新と稼働状態が揃った完了を受け入れる', () => {
+  const s = completedSnapshot();
+  assert.deepEqual(decodeRunSnapshot(s),s);
+});
+
+test('完了の根拠が不足・取得失敗・適用停止・処理中なら拒否する', () => {
+  for (let i=0;i<4;i++) {
+    const s = completedSnapshot();
+    if (i===0) s.observations[4].value.value = '0';
+    if (i===1) s.observations[5].status = 'unavailable';
+    if (i===2) s.observations[6].value.value.applier_running = false;
+    if (i===3) s.operations[0].status = 'running';
+    expectRejected(s);
+  }
+});
+
+test('null可の項目も欠落は拒否し、SSEの未知項目も拒否する', () => {
+  const s = snapshot(); delete s.observations[0].error; expectRejected(s);
+  const idle = fixture('idle-state'); delete idle.current_run;
+  decodeDashboardState(fixture('idle-state'));
+  assert.throws(() => decodeDashboardState(idle));
+  const events = fixture('events'); decodeEventEnvelope(events[0]);
+  assert.throws(() => decodeEventEnvelope({...events[0],extra:true}));
+  assert.throws(() => decodeEventEnvelope({...events[0],payload:{...events[0].payload,extra:true}}));
 });

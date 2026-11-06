@@ -1,9 +1,23 @@
-//! Step 1 review scaffold: DTOs and signatures only.
-//! Validation and state transitions deliberately remain unimplemented until approval.
+//! 中心の型はRunSnapshot、OperationPlan/State、Observation、ManualRead。
+//! SSEはevents、検証処理はvalidationに分離。読み方はdocs/12を参照。
 use serde::{Deserialize, Serialize};
+
+mod events;
+mod validation;
+pub use events::{EventEnvelope, EventPayload};
+pub use validation::{validate_event, validate_snapshot};
 
 pub type DecimalString = String;
 pub type UtcTimestamp = String;
+
+// nullableでも項目自体は必須。欠落を暗黙のNoneに変換しない。
+fn required_nullable<'de, D, T>(d: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(d)
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -66,9 +80,13 @@ pub struct OperationPlan {
     pub operation_id: String,
     pub kind: OperationKind,
     pub target: DatabaseTarget,
+    #[serde(deserialize_with = "required_nullable")]
     pub batch_number: Option<DecimalString>,
+    #[serde(deserialize_with = "required_nullable")]
     pub first_id: Option<DecimalString>,
+    #[serde(deserialize_with = "required_nullable")]
     pub last_id: Option<DecimalString>,
+    #[serde(deserialize_with = "required_nullable")]
     pub planned_rows: Option<DecimalString>,
     pub sql: SqlStatement,
     /// Required commits; this is not a total execution order.
@@ -100,11 +118,17 @@ pub struct OperationState {
     pub operation_id: String,
     pub status: OperationStatus,
     pub replica_status: ReplicaApplicationStatus,
+    #[serde(deserialize_with = "required_nullable")]
     pub replica_observed_at: Option<UtcTimestamp>,
+    #[serde(deserialize_with = "required_nullable")]
     pub started_at: Option<UtcTimestamp>,
+    #[serde(deserialize_with = "required_nullable")]
     pub completed_at: Option<UtcTimestamp>,
+    #[serde(deserialize_with = "required_nullable")]
     pub elapsed_ms: Option<f64>,
+    #[serde(deserialize_with = "required_nullable")]
     pub affected_rows: Option<DecimalString>,
+    #[serde(deserialize_with = "required_nullable")]
     pub error: Option<ApiError>,
 }
 
@@ -132,6 +156,7 @@ pub enum ObservationStatus {
 pub struct ReplicationState {
     pub receiver_running: bool,
     pub applier_running: bool,
+    #[serde(deserialize_with = "required_nullable")]
     pub seconds_behind_source: Option<f64>,
     pub relay_log_bytes: DecimalString,
     pub source_log_file: String,
@@ -141,7 +166,12 @@ pub struct ReplicationState {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case", deny_unknown_fields)]
+#[serde(
+    tag = "kind",
+    content = "value",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
 pub enum ObservationValue {
     Decimal(DecimalString),
     Replication(ReplicationState),
@@ -153,11 +183,16 @@ pub struct Observation {
     pub target: DatabaseTarget,
     pub metric: ObservationMetric,
     pub status: ObservationStatus,
+    #[serde(deserialize_with = "required_nullable")]
     pub value: Option<ObservationValue>,
+    #[serde(deserialize_with = "required_nullable")]
     pub started_at: Option<UtcTimestamp>,
     /// Timestamp of the retained successful value, even after a later failure.
+    #[serde(deserialize_with = "required_nullable")]
     pub observed_at: Option<UtcTimestamp>,
+    #[serde(deserialize_with = "required_nullable")]
     pub elapsed_ms: Option<f64>,
+    #[serde(deserialize_with = "required_nullable")]
     pub error: Option<ApiError>,
 }
 
@@ -185,10 +220,14 @@ pub struct ManualRead {
     pub sql: String,
     pub status: ManualReadStatus,
     /// Succeeded + null means SQL NULL; status distinguishes pending/failure.
+    #[serde(deserialize_with = "required_nullable")]
     pub value: Option<DecimalString>,
     pub started_at: UtcTimestamp,
+    #[serde(deserialize_with = "required_nullable")]
     pub completed_at: Option<UtcTimestamp>,
+    #[serde(deserialize_with = "required_nullable")]
     pub elapsed_ms: Option<f64>,
+    #[serde(deserialize_with = "required_nullable")]
     pub error: Option<ApiError>,
 }
 
@@ -207,6 +246,7 @@ pub struct RunSnapshot {
     pub observations: Vec<Observation>,
     pub manual_reads: Vec<ManualRead>,
     pub stale_read_observed: bool,
+    #[serde(deserialize_with = "required_nullable")]
     pub error: Option<ApiError>,
 }
 
@@ -226,7 +266,9 @@ pub struct DatabaseConnection {
     /// Host and port only; never a connection URL containing credentials.
     pub display_address: String,
     pub status: ConnectionStatus,
+    #[serde(deserialize_with = "required_nullable")]
     pub checked_at: Option<UtcTimestamp>,
+    #[serde(deserialize_with = "required_nullable")]
     pub error: Option<ApiError>,
 }
 
@@ -237,35 +279,9 @@ pub struct DashboardState {
     pub server_instance_id: String,
     pub default_config: RunConfig,
     /// No current run means idle; it does not mean a previous run completed.
+    #[serde(deserialize_with = "required_nullable")]
     pub current_run: Option<RunSnapshot>,
     pub connections: Vec<DatabaseConnection>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct EventEnvelope {
-    pub schema_version: u32,
-    pub run_id: String,
-    pub sequence: DecimalString,
-    pub occurred_at: UtcTimestamp,
-    #[serde(flatten)]
-    pub event: EventPayload,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", content = "payload", rename_all = "snake_case")]
-pub enum EventPayload {
-    RunPhaseChanged { phase: RunPhase },
-    QueryStarted { operation: OperationState },
-    QueryCompleted { operation: OperationState },
-    QueryFailed { operation: OperationState },
-    DbObserved { observation: Observation },
-    StaleReadObserved { source_value: DecimalString, replica_value: DecimalString },
-    ManualReadStarted { read: ManualRead },
-    ManualReadCompleted { read: ManualRead },
-    ManualReadFailed { read: ManualRead },
-    RunCompleted { snapshot: Box<RunSnapshot> },
-    RunFailed { snapshot: Box<RunSnapshot> },
-    Snapshot { snapshot: Box<RunSnapshot> },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -286,19 +302,17 @@ pub struct ContractError {
     pub path: String,
 }
 
-/// Validate public fields and cross-field invariants, without issuing SQL.
-/// Failure identifies a machine-readable code and the invalid field path.
-pub fn validate_snapshot(_snapshot: &RunSnapshot) -> Result<(), ContractError> {
-    todo!("Step 1: implement after contract/test approval")
-}
-
-/// Validate the event version, identifiers, timestamp, and payload consistency.
-pub fn validate_event(_event: &EventEnvelope) -> Result<(), ContractError> {
-    todo!("Step 1: implement after contract/test approval")
-}
-
 /// Test whether a requested phase change is permitted; no mutation or DB access.
 /// Completion prerequisites are checked by the runner, not inferred from this graph.
-pub fn can_transition(_from: RunPhase, _to: RunPhase) -> bool {
-    todo!("Step 1: implement after contract/test approval")
+pub fn can_transition(from: RunPhase, to: RunPhase) -> bool {
+    use RunPhase::*;
+    matches!(
+        (from, to),
+        (Idle, Preparing)
+            | (Preparing, WaitingInitialSync | Failing)
+            | (WaitingInitialSync, Running | Failing)
+            | (Running, WaitingFinalSync | Failing)
+            | (WaitingFinalSync, Completed | Failing)
+            | (Failing, Failed)
+    )
 }
