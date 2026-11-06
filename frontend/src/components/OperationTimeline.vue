@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { TooltipContent, TooltipPortal, TooltipProvider, TooltipRoot, TooltipTrigger } from 'reka-ui';
-import type { RunSnapshot } from '../types/api.ts';
+import type { RunConfig, RunSnapshot } from '../types/api.ts';
 import { formatDecimal, formatTime, operationLabel, operationPurpose, operationRange, operationStatus, replicaStatus } from '../display.ts';
 import RunSettingsDialog from './RunSettingsDialog.vue';
 
-const props = defineProps<{ snapshot: RunSnapshot | null; selectedId?: string; stale?: boolean }>();
-defineEmits<{ select: [id: string] }>();
+const props = defineProps<{
+  snapshot: RunSnapshot | null; selectedId?: string; stale?: boolean; settings?: RunConfig; canConfigure?: boolean;
+}>();
+defineEmits<{ select: [id: string]; configure: [config: RunConfig] }>();
 const rows = computed(() => {
   const states = new Map(props.snapshot?.operations.map(state => [state.operation_id, state]));
   return props.snapshot?.plan.map(plan => ({ plan, state: states.get(plan.operation_id) })) ?? [];
@@ -17,7 +19,7 @@ const rows = computed(() => {
   <section class="panel" aria-labelledby="flow-heading">
     <div class="section-top">
       <h2 id="flow-heading">処理の流れ</h2>
-      <RunSettingsDialog :config="snapshot?.config" />
+      <RunSettingsDialog :config="settings" :editable="canConfigure" @save="$emit('configure', $event)" />
     </div>
     <p class="flow-config" v-if="snapshot">
       全 {{ formatDecimal(snapshot.config.demo_rows) }} 件 / UPDATE {{ formatDecimal(snapshot.config.heavy_batch_size) }} 件ずつ<br>

@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import type { DatabaseConnection, DatabaseTarget, ObservationMetric, RunSnapshot } from '../types/api.ts';
+import type { DatabaseConnection, DatabaseTarget, ManualRead, ObservationMetric, RunSnapshot } from '../types/api.ts';
 import DatabaseProgress from './DatabaseProgress.vue';
 import ManualReadPanel from './ManualReadPanel.vue';
 
-const props = defineProps<{ snapshot: RunSnapshot | null; connections?: DatabaseConnection[]; stale?: boolean }>();
+const props = defineProps<{
+  snapshot: RunSnapshot | null; connections?: DatabaseConnection[]; stale?: boolean;
+  canRead?: boolean; reading?: boolean; manualReads?: ManualRead[]; readError?: string;
+}>();
+defineEmits<{ read: []; clearReads: [] }>();
 const targets = [{ key: 'source', name: 'Master' }, { key: 'replica', name: 'Slave' }] as const;
 
 function observation(target: DatabaseTarget, metric: ObservationMetric) {
@@ -24,7 +28,11 @@ function observation(target: DatabaseTarget, metric: ObservationMetric) {
       :total="snapshot?.config.demo_rows"
       :stale="stale"
     >
-      <ManualReadPanel v-if="target.key === 'replica'" />
+      <ManualReadPanel
+        v-if="target.key === 'replica'"
+        :enabled="canRead" :reading="reading" :reads="manualReads" :error="readError"
+        @read="$emit('read')" @clear="$emit('clearReads')"
+      />
     </DatabaseProgress>
   </section>
 </template>

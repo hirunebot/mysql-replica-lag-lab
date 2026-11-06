@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { decodeDashboardState } from '../../src/types/api.ts';
 
 test('未取得画面が横にはみ出さず、設定を開閉できる', async ({ page }) => {
   await page.goto('/');
@@ -42,4 +44,27 @@ test('ホバーとキーボードで目的を確認し、Escapeで閉じる', as
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'UPDATE 2', exact: true })).toBeVisible();
   await expect(operation).toBeFocused();
+});
+
+test('設定を保存し、開始時にその設定を一度だけ送る', async ({ page }) => {
+  const idle = decodeDashboardState(JSON.parse(readFileSync(new URL(
+    '../../../tests/fixtures/dashboard/idle-state.json', import.meta.url,
+  ), 'utf8')));
+  await page.route('**/api/state', route => route.fulfill({ json: {
+    ...idle, connections: idle.connections.map(item => ({ ...item, status: 'available', error: null })),
+  } }));
+  const requests: unknown[] = [];
+  await page.route('**/api/runs', route => {
+    requests.push(route.request().postDataJSON());
+    return route.fulfill({ status: 409, json: { code: 'run_in_progress', message: 'すでに実行中です。', retryable: true } });
+  });
+  await page.goto('/');
+  await expect(page.getByText('開始するとSourceの lag_demo を作り直します。')).toBeVisible();
+  await page.getByRole('button', { name: '設定', exact: true }).click();
+  await page.getByLabel('対象行数').fill('300000');
+  await page.getByRole('button', { name: '設定を保存' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: '開始', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveText('すでに実行中です。');
+  expect(requests).toEqual([{ ...idle.default_config, demo_rows: '300000' }]);
 });
