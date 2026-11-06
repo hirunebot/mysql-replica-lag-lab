@@ -1,4 +1,4 @@
-/** Declaration-only API boundary for review. No HTTP requests are implemented. */
+/** ダッシュボードが使うHTTP API。 */
 import type { DashboardState, ManualRead, RunConfig, RunSnapshot } from '../types/api.ts';
 
 export interface DashboardApi {

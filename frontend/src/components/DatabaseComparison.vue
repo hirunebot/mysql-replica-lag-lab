@@ -3,7 +3,7 @@ import type { DatabaseConnection, DatabaseTarget, ObservationMetric, RunSnapshot
 import DatabaseProgress from './DatabaseProgress.vue';
 import ManualReadPanel from './ManualReadPanel.vue';
 
-const props = defineProps<{ snapshot: RunSnapshot | null; connections?: DatabaseConnection[] }>();
+const props = defineProps<{ snapshot: RunSnapshot | null; connections?: DatabaseConnection[]; stale?: boolean }>();
 const targets = [{ key: 'source', name: 'Master' }, { key: 'replica', name: 'Slave' }] as const;
 
 function observation(target: DatabaseTarget, metric: ObservationMetric) {
@@ -18,9 +18,11 @@ function observation(target: DatabaseTarget, metric: ObservationMetric) {
       :key="target.key"
       :label="target.name"
       :address="connections?.find(connection => connection.target === target.key)?.display_address"
+      :connection="connections?.find(connection => connection.target === target.key)?.status"
       :count="observation(target.key, 'updated_rows')"
       :marker="observation(target.key, 'marker')"
       :total="snapshot?.config.demo_rows"
+      :stale="stale"
     >
       <ManualReadPanel v-if="target.key === 'replica'" />
     </DatabaseProgress>

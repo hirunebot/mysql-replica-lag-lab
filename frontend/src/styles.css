@@ -30,7 +30,7 @@ button:disabled { opacity: .55; cursor: default; }
 .muted { color: var(--muted); }
 
 .dashboard { max-width: 1320px; margin: auto; padding: 26px 32px 40px; }
-.toolbar, .title-group, .db-header, .stats, .section-top, .read-action, .dialog-actions {
+.toolbar, .toolbar-actions, .title-group, .db-header, .stats, .section-top, .read-action, .dialog-actions {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -50,7 +50,7 @@ button:disabled { opacity: .55; cursor: default; }
 .big span { color: var(--muted); font: 12px system-ui, sans-serif; }
 .meter { height: 4px; margin: 14px 0 8px; overflow: hidden; background: #eceef0; }
 .meter div { height: 100%; background: #5f7283; }
-.marker { display: flex; align-items: center; gap: 15px; margin-top: 17px; }
+.marker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 15px; margin-top: 17px; }
 .marker strong { font: 500 18px var(--mono); overflow-wrap: anywhere; }
 .manual-read { margin-top: 14px; }
 .read-action { flex-wrap: wrap; }
