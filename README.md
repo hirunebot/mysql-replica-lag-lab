@@ -79,6 +79,7 @@ Rust application
 | `src/main.rs` | CLIの設定読み込み、表示、終了コード |
 | `src/runner.rs` | デモ全体の実行計画、並行処理、失敗時の終了管理 |
 | `src/queries.rs` / `src/events.rs` | 実行と表示で共有するSQL、実行通知の受け口 |
+| `src/bin/server.rs` / `src/api/` | ローカルHTTP API。開始と実行状態の取得 |
 | `php/bin/demo.php` | PHP版のエントリーポイント |
 | `php/src/` | PHP版の設定、DB操作、forkワーカー、監視 |
 | `php/Dockerfile` | PDO MySQLとpcntlを含むPHP CLI環境 |
@@ -98,6 +99,7 @@ Rust application
 11. [Dashboard API・状態モデル](docs/11-dashboard-api.md)
 12. [今読む型のガイド](docs/12-contracts-reading-guide.md)
 13. [共通runnerの契約と検証](docs/13-runner-contract.md)
+14. [HTTP APIの起動と使い方](docs/14-dashboard-http.md)
 
 ## 開発時の確認
 

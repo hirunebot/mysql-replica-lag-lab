@@ -66,7 +66,7 @@ pub fn build_plan(config: &RunConfig) -> Result<Vec<OperationPlan>> {
     plan(rows, seed, heavy, marker)
 }
 
-fn parse_workload(c: &RunConfig) -> Result<[u64; 4]> {
+pub(crate) fn parse_workload(c: &RunConfig) -> Result<[u64; 4]> {
     fn number(value: &str, name: &str) -> Result<u64> {
         let n: u64 = value.parse().with_context(|| format!("invalid {name}"))?;
         ensure!(n.to_string() == value, "invalid {name}");
@@ -79,6 +79,22 @@ fn parse_workload(c: &RunConfig) -> Result<[u64; 4]> {
     Config::validate_workload(rows, seed, heavy, marker)?;
     Ok([rows, seed, heavy, marker])
 }
+
+#[derive(Debug)]
+pub(crate) enum PreflightFailure {
+    DatabaseUnavailable,
+    ReplicationNotReady,
+}
+
+impl std::fmt::Display for PreflightFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::DatabaseUnavailable => "failed to reach the demo databases",
+            Self::ReplicationNotReady => "replication is not ready",
+        })
+    }
+}
+impl std::error::Error for PreflightFailure {}
 
 fn plan(rows: u64, seed: u64, heavy: u64, marker: u64) -> Result<Vec<OperationPlan>> {
     use DatabaseTarget::{Replica, Source};
@@ -197,8 +213,11 @@ async fn execute(c: &Config, j: &Journal) -> Result<RunOutcome> {
     let (source, replica) = tokio::try_join!(
         database::connect(&c.source_database_url, "Source"),
         database::connect(&c.replica_database_url, "Replica")
-    )?;
-    database::ensure_replication_running(&replica).await?;
+    )
+    .context(PreflightFailure::DatabaseUnavailable)?;
+    database::ensure_replication_running(&replica)
+        .await
+        .context(PreflightFailure::ReplicationNotReady)?;
     j.operation("setup", setup::recreate_schema(&source, j))
         .await?;
     j.operation("seed", setup::seed(&source, c, j)).await?;
