@@ -270,6 +270,8 @@ SSEの配信、履歴からの再送、最新スナップショットへの復�
 
 ## ステップ7：Vueの画面骨格を作る
 
+`frontend/` で `npm ci` と `npm run dev` を実行する。通常画面は未取得状態を表示し、開発時のみ `/?fixture=1` でサンプルを選べる。ブラウザ検証は `npx playwright install chromium` の後に `npm run test:browser`。
+
 ### ファイル構成
 
 ```text
