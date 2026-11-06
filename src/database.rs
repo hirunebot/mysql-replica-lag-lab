@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use crate::queries;
 use anyhow::{Context, Result, bail};
 use sqlx::{MySqlPool, Row, mysql::MySqlPoolOptions};
 
@@ -11,6 +12,8 @@ pub struct ReplicaStatus {
     pub relay_log_space: u64,
     pub read_source_log_pos: u64,
     pub exec_source_log_pos: u64,
+    pub source_log_file: String,
+    pub relay_source_log_file: String,
 }
 
 pub async fn connect(url: &str, label: &str) -> Result<MySqlPool> {
@@ -56,11 +59,13 @@ pub async fn replica_status(replica: &MySqlPool) -> Result<Option<ReplicaStatus>
         relay_log_space: row.try_get(22)?,
         read_source_log_pos: row.try_get(6)?,
         exec_source_log_pos: row.try_get(21)?,
+        source_log_file: row.try_get(5)?,
+        relay_source_log_file: row.try_get(9)?,
     }))
 }
 
 pub async fn marker_value(pool: &MySqlPool) -> Result<u64> {
-    let value: u64 = sqlx::query_scalar("SELECT value FROM lag_demo.marker WHERE id = 1")
+    let value: u64 = sqlx::query_scalar(queries::MARKER_VALUE)
         .fetch_one(pool)
         .await
         .context("failed to read marker")?;
@@ -68,7 +73,7 @@ pub async fn marker_value(pool: &MySqlPool) -> Result<u64> {
 }
 
 pub async fn item_count(pool: &MySqlPool) -> Result<u64> {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM lag_demo.items")
+    let count: i64 = sqlx::query_scalar(queries::ITEM_COUNT)
         .fetch_one(pool)
         .await
         .context("failed to count items")?;
@@ -76,7 +81,7 @@ pub async fn item_count(pool: &MySqlPool) -> Result<u64> {
 }
 
 pub async fn updated_item_count(pool: &MySqlPool) -> Result<u64> {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM lag_demo.items WHERE version = 2")
+    let count: i64 = sqlx::query_scalar(queries::UPDATED_COUNT)
         .fetch_one(pool)
         .await
         .context("failed to count updated items")?;
