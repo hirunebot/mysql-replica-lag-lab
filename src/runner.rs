@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, ensure};
-use sqlx::MySqlPool;
+use sqlx::{MySqlExecutor, MySqlPool};
 use tokio::sync::{oneshot, watch};
 
 use crate::{
@@ -17,7 +17,9 @@ use crate::{
     },
     database,
     events::Reporter,
-    monitor, queries, setup, workload,
+    monitor,
+    observer::Observer,
+    queries, setup, workload,
 };
 mod reporting;
 pub(crate) use reporting::Journal;
@@ -180,6 +182,21 @@ fn plan(rows: u64, seed: u64, heavy: u64, marker: u64) -> Result<Vec<OperationPl
 /// エラー時は新しいバッチ投入を止め、実行中のSQL/子タスクの終了確認後に返る。
 /// 接続情報を含む生エラーは公開イベントへ渡さず、CLI側で詳細を扱う。
 pub async fn run(config: RunnerConfig, reporter: Arc<dyn Reporter>) -> Result<RunOutcome> {
+    run_with_observations(config, reporter, false).await
+}
+
+pub(crate) async fn run_dashboard(
+    config: RunnerConfig,
+    reporter: Arc<dyn Reporter>,
+) -> Result<RunOutcome> {
+    run_with_observations(config, reporter, true).await
+}
+
+async fn run_with_observations(
+    config: RunnerConfig,
+    reporter: Arc<dyn Reporter>,
+    dashboard: bool,
+) -> Result<RunOutcome> {
     ensure!(
         !config.run_id.trim().is_empty() && !config.server_instance_id.trim().is_empty(),
         "run identifiers must not be empty"
@@ -197,9 +214,14 @@ pub async fn run(config: RunnerConfig, reporter: Arc<dyn Reporter>) -> Result<Ru
         final_sync_timeout: config.final_sync_timeout,
     };
     settings.validate()?;
-    let journal = Journal::new(&config, plan(rows, seed, heavy, marker)?, reporter);
+    let journal = Journal::new(
+        &config,
+        plan(rows, seed, heavy, marker)?,
+        reporter,
+        dashboard,
+    );
     journal.phase(RunPhase::Preparing);
-    let result = execute(&settings, &journal).await;
+    let result = execute(&settings, &journal, dashboard).await;
     if result.is_err() {
         journal.phase(RunPhase::Failing);
     }
@@ -207,12 +229,18 @@ pub async fn run(config: RunnerConfig, reporter: Arc<dyn Reporter>) -> Result<Ru
     result
 }
 
-async fn execute(c: &Config, j: &Journal) -> Result<RunOutcome> {
-    use DatabaseTarget::{Replica, Source};
-    use ObservationMetric::{Marker, TotalRows, UpdatedRows};
+async fn execute(c: &Config, j: &Journal, dashboard: bool) -> Result<RunOutcome> {
     let (source, replica) = tokio::try_join!(
-        database::connect(&c.source_database_url, "Source"),
-        database::connect(&c.replica_database_url, "Replica")
+        database::connect(
+            &c.source_database_url,
+            "Source",
+            if dashboard { 2 } else { 10 }
+        ),
+        database::connect(
+            &c.replica_database_url,
+            "Replica",
+            if dashboard { 1 } else { 10 }
+        )
     )
     .context(PreflightFailure::DatabaseUnavailable)?;
     database::ensure_replication_running(&replica)
@@ -220,17 +248,52 @@ async fn execute(c: &Config, j: &Journal) -> Result<RunOutcome> {
         .context(PreflightFailure::ReplicationNotReady)?;
     j.operation("setup", setup::recreate_schema(&source, j))
         .await?;
-    j.operation("seed", setup::seed(&source, c, j)).await?;
-    let rows = j
-        .decimal(Source, TotalRows, database::item_count(&source))
+    if dashboard {
+        let gtids = database::bounded_read(&source, async |connection| {
+            database::executed_gtids(connection).await
+        })
         .await?;
-    ensure!(
-        rows == c.demo_rows,
-        "Source seed count mismatch: expected {}, got {rows}",
-        c.demo_rows
-    );
+        let observer = Observer::new(c, gtids)?;
+        // Webのpreflight専用接続を観測開始前に返す。
+        replica.close().await;
+        observer
+            .during(
+                execute_work(c, j, &source, &replica, Some(&observer)),
+                j,
+                c.poll_interval,
+            )
+            .await
+    } else {
+        execute_work(c, j, &source, &replica, None).await
+    }
+}
+
+async fn execute_work(
+    c: &Config,
+    j: &Journal,
+    source: &MySqlPool,
+    replica: &MySqlPool,
+    observer: Option<&Observer>,
+) -> Result<RunOutcome> {
+    use DatabaseTarget::{Replica, Source};
+    use ObservationMetric::{Marker, TotalRows, UpdatedRows};
+    j.operation("seed", setup::seed(source, c, j)).await?;
+    if observer.is_none() {
+        let rows = j
+            .decimal(Source, TotalRows, database::item_count(source))
+            .await?;
+        ensure!(
+            rows == c.demo_rows,
+            "Source seed count mismatch: expected {}, got {rows}",
+            c.demo_rows
+        );
+    }
     j.phase(RunPhase::WaitingInitialSync);
-    setup::wait_for_initial_sync(&replica, c, j).await?;
+    if let Some(observer) = observer {
+        observer.wait_initial(j, c).await?;
+    } else {
+        setup::wait_for_initial_sync(replica, c, j).await?;
+    }
     j.phase(RunPhase::Running);
     j.line(format_args!(
         "\nInitial state is synchronized. Starting the lag scenario."
@@ -241,7 +304,7 @@ async fn execute(c: &Config, j: &Journal) -> Result<RunOutcome> {
     let (heavy, (expected, observation)) = supervise(
         &stop,
         || j.phase(RunPhase::Failing),
-        workload::run_heavy_workload(&source, c, j, ready, &progress, &stop),
+        workload::run_heavy_workload(source, c, j, ready, &progress, &stop),
         async {
             ready_rx
                 .await
@@ -252,20 +315,30 @@ async fn execute(c: &Config, j: &Journal) -> Result<RunOutcome> {
                 c.marker_after_batches
             ));
             let started = Instant::now();
-            j.operation("marker", workload::update_marker(&source, j))
+            let affected = j
+                .operation("marker", workload::update_marker(source, j))
                 .await?;
+            let mut stopped = stop.subscribe();
+            if let Some(observer) = observer {
+                ensure!(affected == 1, "marker UPDATE did not affect one row");
+                let observation = tokio::select! {
+                    biased;
+                    _ = stopped.wait_for(|stop| *stop) => anyhow::bail!("heavy workload stopped"),
+                    result = observer.wait_marker(j, c.final_sync_timeout, started) => result?,
+                };
+                return Ok((1, observation));
+            }
             let marker = j
-                .decimal(Source, Marker, database::marker_value(&source))
+                .decimal(Source, Marker, database::marker_value(source))
                 .await?;
             j.line(format_args!(
                 "Source marker committed as value {marker} in {:.3}s.",
                 started.elapsed().as_secs_f64()
             ));
-            let mut stopped = stop.subscribe();
             let observation = tokio::select! {
                 biased;
                 _ = stopped.wait_for(|stop| *stop) => anyhow::bail!("heavy workload stopped"),
-                result = monitor::wait_for_marker(&source,&replica,marker,&progress,c,j) => result?,
+                result = monitor::wait_for_marker(source,replica,marker,&progress,c,j) => result?,
             };
             Ok((marker, observation))
         },
@@ -293,15 +366,19 @@ async fn execute(c: &Config, j: &Journal) -> Result<RunOutcome> {
     ));
     j.phase(RunPhase::WaitingFinalSync);
     j.operation("final-sync", async {
-        setup::wait_for_final_sync(&replica, c, j).await?;
+        if let Some(observer) = observer {
+            observer.wait_final(j, c).await?;
+            return Ok(c.demo_rows);
+        }
+        setup::wait_for_final_sync(replica, c, j).await?;
         let (source_total, replica_total, source_updated, source_marker, replica_marker, status) =
             tokio::try_join!(
-                j.decimal(Source, TotalRows, database::item_count(&source)),
-                j.decimal(Replica, TotalRows, database::item_count(&replica)),
-                j.decimal(Source, UpdatedRows, database::updated_item_count(&source)),
-                j.decimal(Source, Marker, database::marker_value(&source)),
-                j.decimal(Replica, Marker, database::marker_value(&replica)),
-                j.replication(replica_status(&replica)),
+                j.decimal(Source, TotalRows, database::item_count(source)),
+                j.decimal(Replica, TotalRows, database::item_count(replica)),
+                j.decimal(Source, UpdatedRows, database::updated_item_count(source)),
+                j.decimal(Source, Marker, database::marker_value(source)),
+                j.decimal(Replica, Marker, database::marker_value(replica)),
+                j.replication(replica_status(replica)),
             )?;
         ensure!(
             [source_total, replica_total, source_updated]
@@ -331,7 +408,9 @@ async fn execute(c: &Config, j: &Journal) -> Result<RunOutcome> {
     })
 }
 
-pub(crate) async fn replica_status(replica: &MySqlPool) -> Result<database::ReplicaStatus> {
+pub(crate) async fn replica_status<'a>(
+    replica: impl MySqlExecutor<'a>,
+) -> Result<database::ReplicaStatus> {
     database::replica_status(replica)
         .await?
         .context("replication status disappeared while monitoring")

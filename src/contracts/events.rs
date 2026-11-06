@@ -36,6 +36,9 @@ pub enum EventPayload {
     QueryFailed {
         operation: OperationState,
     },
+    ReplicaOperationObserved {
+        operation: OperationState,
+    },
     DbObserved {
         observation: Observation,
     },

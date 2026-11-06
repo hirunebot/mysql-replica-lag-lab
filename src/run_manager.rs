@@ -56,7 +56,7 @@ impl RunManager {
     pub(crate) fn new(config: Config) -> anyhow::Result<Arc<Self>> {
         Self::with_engine(
             config,
-            Arc::new(|config, reporter| Box::pin(runner::run(config, reporter))),
+            Arc::new(|config, reporter| Box::pin(runner::run_dashboard(config, reporter))),
         )
     }
 
@@ -170,7 +170,7 @@ impl RunManager {
             config: workload.clone(),
             plan,
             operations,
-            observations: vec![],
+            observations: crate::observer::initial_observations(),
             manual_reads: vec![],
             stale_read_observed: false,
             error: None,
@@ -281,7 +281,8 @@ impl Reporter for RunReporter {
                 }
                 EventPayload::QueryStarted { operation }
                 | EventPayload::QueryCompleted { operation }
-                | EventPayload::QueryFailed { operation } => {
+                | EventPayload::QueryFailed { operation }
+                | EventPayload::ReplicaOperationObserved { operation } => {
                     if let Some(slot) = r
                         .snapshot
                         .operations

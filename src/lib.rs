@@ -5,6 +5,7 @@ pub mod contracts;
 mod database;
 pub mod events;
 mod monitor;
+mod observer;
 pub mod queries;
 mod run_manager;
 pub mod runner;
