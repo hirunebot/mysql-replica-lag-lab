@@ -3,6 +3,7 @@ import { decodeEventEnvelope, type EventEnvelope, type EventPayload } from '../t
 
 const names: Record<EventPayload['type'], true> = {
   snapshot: true, run_phase_changed: true, query_started: true, query_progress: true,
+  query_statement: true,
   query_completed: true, query_failed: true, replica_operation_observed: true, db_observed: true,
   stale_read_observed: true, manual_read_started: true, manual_read_completed: true,
   manual_read_failed: true, run_completed: true, run_failed: true,
@@ -52,6 +53,11 @@ export function applyRunEvent(run: RunSnapshot, event: EventEnvelope): RunSnapsh
         ? event.payload.snapshot : undefined;
     case 'run_phase_changed':
       return { ...next, phase: event.payload.phase };
+    case 'query_statement': {
+      const plan = event.payload.plan;
+      if (!run.plan.some(item => item.operation_id === plan.operation_id && item.kind === plan.kind)) return undefined;
+      return { ...next, plan: run.plan.map(item => item.operation_id === plan.operation_id ? plan : item) };
+    }
     case 'query_started':
     case 'query_progress':
     case 'query_completed':

@@ -1,7 +1,8 @@
 //! 継続通知（SSE）の形式。画面の中心データを理解してから読む。
 //! 通知の中身には親モジュールの型をそのまま使う。
 use super::{
-    DecimalString, ManualRead, Observation, OperationState, RunPhase, RunSnapshot, UtcTimestamp,
+    DecimalString, ManualRead, Observation, OperationPlan, OperationState, RunPhase, RunSnapshot,
+    UtcTimestamp,
 };
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +33,9 @@ pub enum EventPayload {
     },
     QueryProgress {
         operation: OperationState,
+    },
+    QueryStatement {
+        plan: OperationPlan,
     },
     QueryCompleted {
         operation: OperationState,
@@ -75,6 +79,7 @@ impl EventPayload {
             Self::RunPhaseChanged { .. } => "run_phase_changed",
             Self::QueryStarted { .. } => "query_started",
             Self::QueryProgress { .. } => "query_progress",
+            Self::QueryStatement { .. } => "query_statement",
             Self::QueryCompleted { .. } => "query_completed",
             Self::QueryFailed { .. } => "query_failed",
             Self::ReplicaOperationObserved { .. } => "replica_operation_observed",

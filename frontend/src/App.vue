@@ -24,6 +24,7 @@ const status = computed(() => {
 });
 const selectedId = ref<string>();
 const selected = computed(() => snapshot.value?.plan.find(operation => operation.operation_id === selectedId.value));
+const selectedState = computed(() => snapshot.value?.operations.find(operation => operation.operation_id === selectedId.value));
 watch(() => snapshot.value?.run_id, () => {
   selectedId.value = snapshot.value?.plan[0]?.operation_id;
 });
@@ -47,9 +48,10 @@ if (import.meta.env.DEV && showFixture) {
       <OperationTimeline
         :snapshot="snapshot"
         :selected-id="selectedId"
+        :stale="!showFixture && connection !== 'connected'"
         @select="selectedId = $event"
       />
-      <QueryDetail :operation="selected" />
+      <QueryDetail :operation="selected" :state="selectedState" />
     </div>
   </main>
 </template>

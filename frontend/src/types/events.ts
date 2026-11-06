@@ -1,11 +1,12 @@
 /** SSE通知の形式。api.tsの中心データを理解してから読む。 */
-import type { DecimalString, UtcTimestamp, RunPhase, OperationState, Observation, ManualRead, RunSnapshot } from './api.ts';
+import type { DecimalString, UtcTimestamp, RunPhase, OperationPlan, OperationState, Observation, ManualRead, RunSnapshot } from './api.ts';
 import { readEventEnvelope } from './validation.ts';
 
 export type EventPayload =
   | { type: 'run_phase_changed'; payload: { phase: RunPhase } }
   | { type: 'query_started' | 'query_progress' | 'query_completed' | 'query_failed'; payload: { operation: OperationState } }
   | { type: 'replica_operation_observed'; payload: { operation: OperationState } }
+  | { type: 'query_statement'; payload: { plan: OperationPlan } }
   | { type: 'db_observed'; payload: { observation: Observation } }
   | { type: 'stale_read_observed'; payload: { source_value: DecimalString; replica_value: DecimalString } }
   | { type: 'manual_read_started' | 'manual_read_completed' | 'manual_read_failed'; payload: { read: ManualRead } }

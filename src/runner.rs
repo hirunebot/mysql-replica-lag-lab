@@ -134,6 +134,8 @@ fn plan(rows: u64, seed: u64, heavy: u64, marker: u64) -> Result<Vec<OperationPl
         vec!["setup".into()],
     );
     seed_plan.planned_rows = Some(rows.to_string());
+    seed_plan.first_id = Some("1".into());
+    seed_plan.last_id = Some(seed.min(rows).to_string());
     plan.push(seed_plan);
     for n in 1..=total {
         let (first, last) = batch_range(n, rows, heavy).context("invalid heavy batch range")?;

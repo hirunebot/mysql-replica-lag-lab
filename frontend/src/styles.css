@@ -66,7 +66,16 @@ th, td { padding: 8px; text-align: left; border-bottom: 1px solid var(--line); }
 th { font-weight: 500; color: var(--muted); }
 .selected { background: #f0f4f7; }
 .batch-button { padding: 3px 6px; border-color: transparent; background: transparent; }
+.row-note { display: block; color: var(--muted); font-size: 11px; }
+.table-note { margin-top: 8px; }
+.badge { display: inline-block; border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; }
+.badge[data-status="committed"], .badge[data-status="observed_applied"] { color: #356750; }
+.badge[data-status="running"], .badge[data-status="pending"] { color: var(--blue); }
+.badge[data-status="failed"], .badge[data-status="unavailable"], .badge[data-status="outcome_unknown"] { color: #97511b; }
+.operation-tooltip { max-width: min(310px, calc(100vw - 32px)); padding: 6px 9px; background: #33383e; color: #fff; border-radius: 3px; }
 .details { padding-top: 12px; }
+.query-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 0; }
+.query-meta dt { color: var(--muted); font-size: 11px; }
 pre { padding: 12px; background: #f6f7f8; overflow: auto; }
 
 .dialog-overlay { position: fixed; inset: 0; background: rgb(0 0 0 / .24); }
