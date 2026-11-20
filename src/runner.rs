@@ -21,6 +21,8 @@ use crate::{
     observer::Observer,
     queries, setup, workload,
 };
+#[cfg(test)]
+mod benchmark;
 mod reporting;
 pub(crate) use reporting::Journal;
 

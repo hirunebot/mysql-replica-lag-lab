@@ -98,7 +98,7 @@ export function applyRunEvent(
 
 ## ステップ1：通信契約と状態モデルを固定する
 
-契約・テストと検証結果は [Dashboard API・状態モデル](11-dashboard-api.md) を参照。ステップ1のDTO検証・状態遷移は実装済み。共通runner以降は未実装で、各ステップの契約・テストを提示してから進める。
+契約・テストと検証結果は [Dashboard API・状態モデル](11-dashboard-api.md) を参照。
 
 ### 作業
 
@@ -155,7 +155,7 @@ API上の行数・ID・marker値・SUMは10進文字列に統一し、JavaScript
 
 ## ステップ3：Axumと実行管理を追加する
 
-開始・状態取得の3つのAPIを実装済み。[起動と検証](14-dashboard-http.md)を参照。SSEと手動SELECTは後続ステップ。
+開始・状態取得の3つのAPIを実装済み。[起動と検証](14-dashboard-http.md)を参照。
 
 ### 変更対象
 
@@ -375,7 +375,7 @@ frontend/
 - `.gitignore` にnode_modules、dist、ブラウザのテスト成果物を追加する。
 - README、利用方法、トラブルシューティングへ手順とNode要件、CLI / PHPとの同時実行禁止を追記する。
 
-予定する開発手順：
+開発手順：
 
 ```bash
 docker compose up -d --wait
@@ -387,7 +387,7 @@ npm ci
 npm run dev
 ```
 
-予定する単一サーバーでの配信手順：
+単一サーバーでの配信手順：
 
 ```bash
 cd frontend
@@ -448,7 +448,7 @@ stale readの発生は負荷と観測タイミングに依存する。未観測�
 
 同じ設定でCLI基準とWeb監視ありをそれぞれ3回実行し、Sourceの大量更新時間、marker反映時間、全件同期時間、COUNT所要時間を記録する。バッチ別COUNTを含めた追加照会の影響を比較し、間隔変更が必要なら理由を残す。
 
-結果は実装時に `docs/12-dashboard-validation.md` へ、環境・設定・実測値・未確認事項とともに保存する。
+結果は [ダッシュボードの検証記録](12-dashboard-validation.md) を参照。
 
 ## 4. 最終的な完了条件
 

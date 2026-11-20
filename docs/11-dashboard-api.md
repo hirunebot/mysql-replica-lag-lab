@@ -4,9 +4,9 @@
 
 ## 状態と承認対象
 
-DTO検証と状態遷移、開始・状態取得・手動SELECT・SSEは実装済み。画面は後続ステップ。
+DTO検証と状態遷移、開始・状態取得・手動SELECT・SSE、およびダッシュボードへの接続を実装済み。
 
-[詳細実装手順](10-frontend-implementation-steps.md)の「契約・テスト → 承認 → 実装」に従い、承認されたステップ1のDTO検証と状態遷移を実装した。HTTPサーバー、SQL実行、runner、SSE送信、Vueの画面は後続ステップで別途テスト・シグネチャを提示する。
+[詳細実装手順](10-frontend-implementation-steps.md)の「契約・テスト → 承認 → 実装」に従い、承認されたステップ1のDTO検証と状態遷移を実装した。HTTPサーバー、SQL実行、runner、SSE送信、Vue画面の実装範囲は詳細実装手順のステップ2〜11を参照。
 
 | ファイル | 今回の役割 |
 | --- | --- |
@@ -15,7 +15,7 @@ DTO検証と状態遷移、開始・状態取得・手動SELECT・SSEは実装�
 | `tests/dashboard_contracts.rs` | Rust側の契約・シリアライズ・状態遷移テスト |
 | `tests/fixtures/dashboard/` | RustとTypeScriptで共有するJSON例 |
 | `frontend/src/types/api.ts` | TypeScript型とdecoder。検証の詳細はvalidation.ts |
-| `frontend/src/api/client.contract.ts` | HTTPクライアントの宣言のみ。通信処理は未実装 |
+| `frontend/src/api/client.contract.ts` | HTTPクライアントの型。通信処理は `frontend/src/api/client.ts` |
 | `frontend/tests/contracts.test.ts` | JSONからの型検証・異常値拒否のテスト |
 | `Cargo.toml` | DTO用Serde、テスト用serde_jsonの依存宣言 |
 

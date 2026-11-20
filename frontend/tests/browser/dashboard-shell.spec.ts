@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { decodeDashboardState } from '../../src/types/api.ts';
 
 test('未取得画面が横にはみ出さず、設定を開閉できる', async ({ page }) => {
+  await page.route('**/api/state', route => route.fulfill({ status: 503 }));
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Master' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Slave' })).toBeVisible();

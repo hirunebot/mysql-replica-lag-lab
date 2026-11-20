@@ -121,6 +121,42 @@ async fn event_stream_replays_changes_after_the_snapshot_and_resume_cursor() {
     );
 }
 
+/// 履歴から落ちた位置を要求したとき、部分的な再送でなく最新snapshotを返す。
+#[tokio::test]
+async fn evicted_event_cursor_recovers_with_the_latest_snapshot() {
+    let app = router_with(
+        RunManager::with_engine(
+            config(),
+            Arc::new(|_, reporter| {
+                Box::pin(async move {
+                    let fixture: RunSnapshot = serde_json::from_str(include_str!(
+                        "../../tests/fixtures/dashboard/snapshot.json"
+                    ))
+                    .unwrap();
+                    let observation = fixture.observations[0].clone();
+                    for _ in 0..2001 {
+                        reporter.report(EventPayload::DbObserved {
+                            observation: observation.clone(),
+                        });
+                    }
+                    std::future::pending().await
+                })
+            }),
+        )
+        .unwrap(),
+    );
+    let (_, run) = post_run(&app, workload()).await;
+    let id = run["run_id"].as_str().unwrap();
+    until(&app, id, |run| run.sequence == "2001").await;
+    let (status, mut stream) =
+        event_stream(&app, &format!("/api/runs/{id}/events?after=0"), None).await;
+    assert_eq!(status, StatusCode::OK);
+    let event = read_event(&mut stream).await;
+    assert!(
+        matches!(event.event, EventPayload::Snapshot { snapshot } if snapshot.sequence == "2001")
+    );
+}
+
 async fn event_stream(
     app: &Router,
     path: &str,
