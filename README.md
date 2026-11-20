@@ -108,6 +108,7 @@ Rust application
 10. [フロントエンド 詳細実装手順](docs/10-frontend-implementation-steps.md)
 11. [Dashboard API・状態モデル](docs/11-dashboard-api.md)
 12. [今読む型のガイド](docs/12-contracts-reading-guide.md)
+    - [ダッシュボードの検証記録](docs/12-dashboard-validation.md)
 13. [共通runnerの契約と検証](docs/13-runner-contract.md)
 14. [HTTP APIの起動と使い方](docs/14-dashboard-http.md)
 

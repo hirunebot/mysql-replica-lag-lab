@@ -9,6 +9,7 @@ import { applyRunEvent, type openRunEvents } from '../src/composables/useRunEven
 import { decodeDashboardState, decodeRunSnapshot, type ManualRead, type Observation } from '../src/types/api.ts';
 import type { EventEnvelope } from '../src/types/events.ts';
 import DatabaseComparison from '../src/components/DatabaseComparison.vue';
+import ManualReadPanel from '../src/components/ManualReadPanel.vue';
 
 const phase = (sequence: string, run_id = fixture.run_id): EventEnvelope => ({
   schema_version: 1, run_id, sequence, occurred_at: '2026-01-01T00:00:00Z',
@@ -135,4 +136,24 @@ test('開始応答が不明ならPOSTを繰り返さずstateを取得する', as
   expect(api.getState).toHaveBeenCalledTimes(2);
   expect(wrapper.vm.snapshot).toBeNull();
   wrapper.unmount();
+});
+
+test('手動SELECTの1を追加しても0が残り、SQL NULLと失敗も区別する', async () => {
+  const base: ManualRead = {
+    read_id: '', run_id: fixture.run_id, target: 'replica', preset: 'marker_sum',
+    sql: 'SELECT SUM(value) FROM lag_demo.marker;', status: 'succeeded', value: null,
+    started_at: '2026-01-01T00:00:00Z', completed_at: '2026-01-01T00:00:01Z', elapsed_ms: 10, error: null,
+  };
+  const reads: ManualRead[] = [
+    { ...base, read_id: 'r4', status: 'failed', error: { code: 'db_unavailable', message: 'Replica unavailable', retryable: true } },
+    { ...base, read_id: 'r3' },
+    { ...base, read_id: 'r2', value: '1' },
+    { ...base, read_id: 'r1', value: '0' },
+  ];
+  const wrapper = mount(ManualReadPanel, { props: { reads: reads.slice(-1), enabled: true } });
+  expect(wrapper.get('tbody strong').text()).toBe('0');
+  await wrapper.setProps({ reads: reads.slice(-2) });
+  expect(wrapper.findAll('tbody strong').map(cell => cell.text())).toEqual(['1', '0']);
+  await wrapper.setProps({ reads });
+  expect(wrapper.findAll('tbody strong').map(cell => cell.text())).toEqual(['失敗', 'NULL', '1', '0']);
 });
